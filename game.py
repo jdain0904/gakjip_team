@@ -1,6 +1,6 @@
 """
 턴제 전략 게임 - 게임 환경 및 규칙 정의
-두 플레이어가 50칸 거리에서 시작하여 먼저 목표 지점에 도달하면 승리
+N명의 플레이어가 50칸 거리에서 시작하여 먼저 목표 지점에 도달하면 승리
 """
 
 import random
@@ -8,20 +8,20 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-BOARD_SIZE = 50        # 초기 플레이어 간 거리
+BOARD_SIZE = 50
 CARD_MIN = 0
 CARD_MAX = 60
-HAND_SIZE = 5          # 초기 손패 수
+HAND_SIZE = 5
 
 
 @dataclass
 class Card:
-    card_type: str      # 'supply' or 'home'
+    card_type: str   # 'supply' or 'home'
     value: int
 
     def __repr__(self):
         t = "보급" if self.card_type == "supply" else "집"
-        return f"[{t} +{self.value}]"
+        return f"[{t}+{self.value}]"
 
 
 def draw_card() -> Card:
@@ -33,10 +33,12 @@ def draw_card() -> Card:
 @dataclass
 class PlayerState:
     player_id: int
-    position: int           # 목표 지점 기준 남은 거리 (0이면 도착)
+    name: str
+    position: int = BOARD_SIZE      # 목표까지 남은 거리
     hand: list = field(default_factory=list)
-    supply_used: bool = False   # 보급 카드 사용 여부 (게임당 1회)
+    supply_used: bool = False
     total_moves: int = 0
+    is_human: bool = False
 
     def draw_initial_hand(self):
         self.hand = [draw_card() for _ in range(HAND_SIZE)]
@@ -60,43 +62,45 @@ class PlayerState:
 
 class GameEnv:
     """
-    게임 환경: 상태 반환, 행동 적용, 승패 판정
+    N인 지원 게임 환경
 
-    행동 공간:
+    행동:
         0 - 1칸 이동
         1 - 집 카드 사용 (최댓값)
         2 - 보급 카드 사용 (1회 제한)
     """
 
-    def __init__(self):
+    def __init__(self, num_players: int = 2, human_ids: Optional[list] = None):
+        assert 2 <= num_players <= 6, "플레이어 수는 2~6명"
+        self.num_players = num_players
+        self.human_ids: list = human_ids or []   # 사람이 조작하는 플레이어 인덱스 목록
         self.players: list[PlayerState] = []
-        self.turn = 0
-        self.done = False
+        self.current_pid: int = 0
+        self.turn: int = 0
+        self.done: bool = False
         self.winner: Optional[int] = None
 
-    def reset(self) -> tuple:
-        p0 = PlayerState(player_id=0, position=BOARD_SIZE)
-        p1 = PlayerState(player_id=1, position=BOARD_SIZE)
-        p0.draw_initial_hand()
-        p1.draw_initial_hand()
-        self.players = [p0, p1]
+    def reset(self):
+        self.players = []
+        for i in range(self.num_players):
+            is_human = i in self.human_ids
+            label = f"플레이어{i+1}" if is_human else f"AI {i+1}"
+            p = PlayerState(player_id=i, name=label, is_human=is_human)
+            p.draw_initial_hand()
+            self.players.append(p)
+        self.current_pid = 0
         self.turn = 0
         self.done = False
         self.winner = None
-        return self._get_state(0), self._get_state(1)
 
-    def _get_state(self, pid: int) -> tuple:
-        """
-        상태 벡터: (내 위치, 상대 위치, 보급카드 사용 여부,
-                    손패 중 최대 집카드 값, 손패 중 최대 보급카드 값)
-        """
+    def get_state(self, pid: int) -> tuple:
         me = self.players[pid]
-        opp = self.players[1 - pid]
+        opp_positions = [self.players[j].position for j in range(self.num_players) if j != pid]
         best_home = me.get_best_home_card()
         best_supply = me.get_supply_card()
         return (
             me.position,
-            opp.position,
+            min(opp_positions),         # 가장 앞선 상대 위치
             int(me.supply_used),
             best_home.value if best_home else 0,
             best_supply.value if best_supply else 0,
@@ -104,7 +108,7 @@ class GameEnv:
 
     def get_valid_actions(self, pid: int) -> list:
         me = self.players[pid]
-        actions = [0]   # 이동은 항상 가능
+        actions = [0]
         if me.get_best_home_card():
             actions.append(1)
         if me.can_use_supply():
@@ -112,54 +116,39 @@ class GameEnv:
         return actions
 
     def step(self, pid: int, action: int) -> tuple:
-        """행동 적용 후 (next_state, reward, done) 반환"""
+        """(reward, done) 반환"""
         me = self.players[pid]
         reward = 0
 
         if action == 0:
-            # 1칸 이동
             me.position -= 1
-            me.total_moves += 1
             reward = 0.1
-
         elif action == 1:
-            # 집 카드 사용
             card = me.get_best_home_card()
             if card:
                 me.position -= card.value
                 me.hand.remove(card)
                 me.hand.append(draw_card())
-                me.total_moves += 1
                 reward = 0.3
-
         elif action == 2:
-            # 보급 카드 사용 (1회 제한)
             card = me.get_supply_card()
             if card and not me.supply_used:
                 me.position -= card.value
                 me.hand.remove(card)
                 me.hand.append(draw_card())
                 me.supply_used = True
-                me.total_moves += 1
                 reward = 0.5
 
-        # 위치 최솟값 0
         me.position = max(0, me.position)
+        me.total_moves += 1
 
-        # 승패 확인
         if me.arrived():
             self.done = True
             self.winner = pid
             reward = 10.0
-        elif self.players[1 - pid].arrived():
-            self.done = True
-            self.winner = 1 - pid
-            reward = -5.0
 
-        self.turn += 1
-        next_state = self._get_state(pid)
-        return next_state, reward, self.done
+        if not self.done:
+            self.current_pid = (self.current_pid + 1) % self.num_players
+            self.turn += 1
 
-    def render(self):
-        p0, p1 = self.players
-        print(f"턴 {self.turn:3d} | P0 위치: {p0.position:3d} | P1 위치: {p1.position:3d}")
+        return reward, self.done
