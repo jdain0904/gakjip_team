@@ -27,7 +27,7 @@ def simulate(agents: list[QLearningAgent], n_games: int = 3000) -> dict:
             ag.epsilon = 0.0     # greedy
             action = ag.choose_action(states[pid], valid)
             ag.epsilon = old_eps
-            _, done = env.step(pid, action)
+            _, done, _ = env.step(pid, action)
             if not done:
                 states[pid] = env.get_state(pid)
 

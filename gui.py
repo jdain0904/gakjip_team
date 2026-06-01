@@ -151,7 +151,6 @@ class DrawAnim:
         alpha = int(255 * (1 - abs(t - 0.5) * 2))
         col = SUPPLY_C if self.card.card_type == "supply" else HOME_C
         r = pygame.Rect(x - 35, y - 24, 70, 48)
-        rounded_rect(surf, (*col, alpha), r, 7)   # 단순 드로우 (alpha 무시됨, pygame surface 없이)
         rounded_rect(surf, col, r, 7)
         if _fonts.get("tiny"):
             draw_text(surf, self.card.label(), _fonts["tiny"], BG, r.centerx, r.centery, "center")
@@ -168,7 +167,8 @@ class IsoBoard:
 
     @classmethod
     def build_bg(cls):
-        """정적 배경(링+방사선) 한 번만 그리기"""
+        if cls._cached_bg is not None:
+            return
         surf = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
         surf.fill((0, 0, 0, 0))
 
