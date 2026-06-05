@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Guardian: Mecha Boss</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+  color: #fff;
+}
+#loading {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  font-size: 1.4em;
+  color: #5df;
+}
+#loading p { margin-top: 16px; color: #aaa; font-size: 0.8em; }
+canvas#canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+</style>
+</head>
+<body>
+<div id="loading">
+  ⏳ Loading Space Guardian…
+  <p>Controls: Arrow keys = Move &nbsp;|&nbsp; Space = Shoot &nbsp;|&nbsp; Z = Laser &nbsp;|&nbsp; C = Shockwave &nbsp;|&nbsp; X = Machinegun</p>
+</div>
+<canvas id="canvas" width="900" height="600"></canvas>
+
+<script>
+window.addEventListener('_pygame_ready', () => {
+  const el = document.getElementById('loading');
+  if (el) el.remove();
+});
+</script>
+<script src="https://pygame-web.github.io/cdn/0.9.3/pythons.js"
+        id="site"
+        data-pkg="game"
+        data-autorun="1"
+        data-icon="favicon.png"
+        async defer></script>
+</body>
+</html>
