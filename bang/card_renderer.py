@@ -811,9 +811,10 @@ def draw_game_card(surf: pygame.Surface, card: Card,
 
     # Suit+value (top-left)
     from cards import Suit
+    from ui_utils import draw_suit_icon
     sv_color = (180, 40, 35) if card.suit in (Suit.HEARTS, Suit.DIAMONDS) else TEXT_INK
     val_str = {1: "A", 11: "J", 12: "Q", 13: "K"}.get(card.value, str(card.value))
-    draw_text(surf, card.suit.value, "tiny", sv_color, x + 4, y + 3)
+    draw_suit_icon(surf, card.suit.value, x + 8, y + 6, 10, sv_color)
     draw_text(surf, val_str, "tiny", sv_color, x + 4, y + 14)
 
     # Title (upper portion)

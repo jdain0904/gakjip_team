@@ -64,7 +64,7 @@ CARD_NAMES_KO = {
     CardType.SALOON:      "살롱",
     CardType.GEN_STORE:   "잡화점",
     CardType.DUEL:        "결투",
-    CardType.VOLCANIC:    "볼케이노",
+    CardType.VOLCANIC:    "볼케이닉",
     CardType.SCHOFIELD:   "스코필드",
     CardType.REMINGTON:   "레밍턴",
     CardType.CARABINE:    "카라빈",

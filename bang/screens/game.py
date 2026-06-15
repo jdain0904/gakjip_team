@@ -68,14 +68,14 @@ class GameScreen:
         self.btn_takeit  = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
                                   "맞겠습니다", RED, radius=9, fkey="normal")
         self.btn_beer    = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
-                                  "🍺 맥주 사용", GREEN, radius=9, fkey="normal")
+                                  "맥주 사용", GREEN, radius=9, fkey="normal")
         self.btn_die     = Button((self.RIGHT_X + 200, WIN_H - 55, 140, 44),
                                   "탈락", (100, 40, 40), radius=9, fkey="normal")
         # Character-draw buttons
         self.btn_from_deck    = Button((WIN_W // 2 - 180, WIN_H // 2 + 60, 160, 44),
-                                       "📥 덱에서", ACCENT, radius=9, fkey="normal")
+                                       "덱에서", ACCENT, radius=9, fkey="normal")
         self.btn_from_discard = Button((WIN_W // 2 + 20, WIN_H // 2 + 60, 160, 44),
-                                       "🗑 버림더미에서", (60, 100, 60), radius=9, fkey="normal")
+                                       "버림더미에서", (60, 100, 60), radius=9, fkey="normal")
 
         self._need_handoff = False
         self._handoff_name = ""
@@ -337,6 +337,10 @@ class GameScreen:
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return
 
+        cx = WIN_W // 2
+        panel_h = 260
+        cy = WIN_H // 2
+
         if self.btn_from_deck.clicked(event, pos):
             gs.char_draw_from_deck()
             self._on_phase_change()
@@ -348,10 +352,17 @@ class GameScreen:
             return
 
         if gs.char_draw_type == "jesse":
-            clicked = self._click_player(pos)
-            if clicked is not None and clicked != pid and gs.players[clicked].hand:
-                gs.char_draw_from_player(clicked)
-                self._on_phase_change()
+            alive = gs._alive_ids()
+            targets = [i for i in alive if i != pid and gs.players[i].hand]
+            panel_y = cy - panel_h // 2
+            btn_y = panel_y + 76
+            for ti in targets:
+                btn = pygame.Rect(cx - 200, btn_y, 400, 34)
+                if btn.collidepoint(pos):
+                    gs.char_draw_from_player(ti)
+                    self._on_phase_change()
+                    return
+                btn_y += 42
 
     # ── KIT PEEK ──────────────────────────────────────────────────────────
     def _handle_kit_peek(self, event, pos, pid):
@@ -780,7 +791,7 @@ class GameScreen:
             Phase.RESPONSE:  f"{p.name} — {'BANG!' if gs.resp_type == RespType.INDIANS else 'Missed!'} 로 반응 또는 맞기",
             Phase.DUEL:      f"{p.name} — 결투: BANG! 내거나 맞기",
             Phase.DISCARD:   f"{p.name} — 버릴 카드 선택 ({len(p.hand) - p.hand_limit()}장 더)",
-            Phase.BEER_SAVE: f"🍺 {p.name} — 맥주로 살아남겠습니까?",
+            Phase.BEER_SAVE: f"{p.name} — 맥주로 살아남겠습니까?",
         }
         draw_text(s, labels.get(gs.phase, ""), "small", GOLD, hx - 8, hy - 26)
 
@@ -878,30 +889,67 @@ class GameScreen:
         gs = self.gs
         if gs.phase != Phase.CHAR_DRAW:
             return
-        s     = self.screen
+        s = self.screen
         cx, cy = WIN_W // 2, WIN_H // 2
         ov = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
         ov.fill((0, 0, 0, 130))
         s.blit(ov, (0, 0))
-        rounded_rect(s, PANEL_BG, pygame.Rect(cx - 260, cy - 100, 520, 220), 14)
-        pygame.draw.rect(s, GOLD, pygame.Rect(cx - 260, cy - 100, 520, 220), 2, border_radius=14)
 
-        pid  = gs.char_draw_pid
-        p    = gs.players[pid]
+        pid = gs.char_draw_pid
+        p = gs.players[pid]
+        from characters import CHARACTERS
         char = CHARACTERS.get(p.character)
-        name = char.name_ko if char else ""
+        char_name = char.name_ko if char else p.name
+
+        panel_w, panel_h = 560, 260
+        panel = pygame.Rect(cx - panel_w // 2, cy - panel_h // 2, panel_w, panel_h)
+        rounded_rect(s, PANEL_BG, panel, 14)
+        pygame.draw.rect(s, GOLD, panel, 2, border_radius=14)
+
+        draw_text(s, f"[ {char_name} ] 첫 번째 카드 출처 선택", "normal", GOLD,
+                  cx, panel.y + 16, "center")
 
         if gs.char_draw_type == "jesse":
-            draw_text(s, f"제시 존스 — 1번째 카드 출처 선택", "normal", GOLD, cx, cy - 82, "center")
-            draw_text(s, "또는 플레이어를 클릭해 그 손패에서 가져오기", "small", GRAY, cx, cy + 20, "center")
-        else:
-            draw_text(s, f"페드로 라미레즈 — 1번째 카드 출처 선택", "normal", GOLD, cx, cy - 82, "center")
-            top = gs.discard[-1].name if gs.discard else "없음"
-            draw_text(s, f"버림더미 맨 위: [{top}]", "small", (160, 140, 80), cx, cy + 20, "center")
+            draw_text(s, "다른 플레이어 손패에서 가져오거나, 덱에서 뽑기", "small", GRAY,
+                      cx, panel.y + 46, "center")
+            # List valid targets as buttons
+            alive = gs._alive_ids()
+            targets = [i for i in alive if i != pid and gs.players[i].hand]
+            btn_y = panel.y + 76
+            mouse = pygame.mouse.get_pos()
+            for ti in targets:
+                tp = gs.players[ti]
+                btn = pygame.Rect(cx - 200, btn_y, 400, 34)
+                hovered = btn.collidepoint(mouse)
+                bg = (70, 110, 55) if hovered else (45, 75, 35)
+                rounded_rect(s, bg, btn, 7)
+                pygame.draw.rect(s, (100, 170, 80), btn, 1, border_radius=7)
+                hand_n = len(tp.hand)
+                draw_text(s, f"{tp.name}  (손패 {hand_n}장)",
+                          "small", WHITE, btn.centerx, btn.centery, "center")
+                btn_y += 42
+            if not targets:
+                draw_text(s, "(가져올 수 있는 플레이어 없음 — 덱에서 뽑기)", "small",
+                          (180, 140, 80), cx, panel.y + 76, "center")
+        else:  # pedro
+            draw_text(s, "버림더미 맨 위 카드를 가져오거나, 덱에서 뽑기", "small", GRAY,
+                      cx, panel.y + 46, "center")
+            if gs.discard:
+                top = gs.discard[-1]
+                from cards import Suit
+                suit_col = (190, 45, 38) if top.suit in (Suit.HEARTS, Suit.DIAMONDS) else (230, 220, 200)
+                val_str = {1: "A", 11: "J", 12: "Q", 13: "K"}.get(top.value, str(top.value))
+                draw_text(s, f"[ {top.name}  {top.suit.value}{val_str} ]",
+                          "sub", suit_col, cx, panel.y + 76, "center")
+            else:
+                draw_text(s, "(버림더미 비어있음)", "small", GRAY, cx, panel.y + 76, "center")
 
         pos = pygame.mouse.get_pos()
+        btn_row_y = panel.bottom - 56
+        self.btn_from_deck.rect.topleft = (cx - 180, btn_row_y)
         self.btn_from_deck.draw(s, self.btn_from_deck.is_hovered(pos))
         if gs.char_draw_type == "pedro":
+            self.btn_from_discard.rect.topleft = (cx + 10, btn_row_y)
             self.btn_from_discard.draw(s, self.btn_from_discard.is_hovered(pos))
 
     # ── Phase banner ──────────────────────────────────────────────────────
@@ -910,15 +958,15 @@ class GameScreen:
         if gs.phase == Phase.GAME_OVER:
             return
         banners = {
-            Phase.DYNAMITE:  ("💥 다이너마이트 체크! 클릭하세요", RED),
-            Phase.JAIL:      ("🔒 감옥 탈출 시도! 클릭하세요", BLUE),
-            Phase.DRAW:      ("📥 클릭하여 카드 2장 드로우", GOLD),
-            Phase.RESPONSE:  ("⚡ 반응 카드를 내거나 맞으세요", RED),
-            Phase.DUEL:      ("⚔️ 결투 — BANG! 내거나 맞기", ORANGE),
-            Phase.DISCARD:   ("🗑️ 버릴 카드 선택", ACCENT),
-            Phase.BEER_SAVE: ("🍺 치명타! 맥주로 살아남겠습니까?", GREEN),
-            Phase.KIT_PEEK:  ("🔍 킷 칼슨: 카드 2장 선택", GOLD),
-            Phase.CHAR_DRAW: ("🤠 특수 드로우", GOLD),
+            Phase.DYNAMITE:  ("다이너마이트 체크! 클릭하세요", RED),
+            Phase.JAIL:      ("감옥 탈출 시도! 클릭하세요", BLUE),
+            Phase.DRAW:      ("클릭하여 카드 2장 드로우", GOLD),
+            Phase.RESPONSE:  ("반응 카드를 내거나 맞으세요", RED),
+            Phase.DUEL:      ("결투 — BANG! 내거나 맞기", ORANGE),
+            Phase.DISCARD:   ("버릴 카드 선택", ACCENT),
+            Phase.BEER_SAVE: ("치명타! 맥주로 살아남겠습니까?", GREEN),
+            Phase.KIT_PEEK:  ("킷 칼슨: 카드 2장 선택", GOLD),
+            Phase.CHAR_DRAW: ("특수 드로우", GOLD),
         }
         if gs.phase in banners:
             label, col = banners[gs.phase]

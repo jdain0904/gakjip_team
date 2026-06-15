@@ -38,6 +38,41 @@ def draw_text(surf, text, fkey, color, x, y, anchor="topleft"):
     return r
 
 
+def draw_suit_icon(surf, suit_value: str, cx: int, cy: int, size: int, color):
+    """Draw a playing card suit symbol as shapes (no font required)."""
+    r = max(3, size // 2)
+    if suit_value == '♥':
+        h = max(2, r // 2)
+        pygame.draw.circle(surf, color, (cx - h, cy - h // 2), h)
+        pygame.draw.circle(surf, color, (cx + h, cy - h // 2), h)
+        pygame.draw.polygon(surf, color, [(cx - r, cy), (cx + r, cy), (cx, cy + r)])
+    elif suit_value == '♦':
+        pygame.draw.polygon(surf, color,
+                            [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)])
+    elif suit_value == '♠':
+        h = max(2, r // 2)
+        pygame.draw.circle(surf, color, (cx - h, cy + h // 2 - r // 2), h)
+        pygame.draw.circle(surf, color, (cx + h, cy + h // 2 - r // 2), h)
+        pygame.draw.polygon(surf, color,
+                            [(cx - r, cy), (cx + r, cy), (cx, cy - r + 2)])
+        stem_w = max(1, r // 3)
+        pygame.draw.rect(surf, color,
+                         (cx - stem_w, cy + r // 3, stem_w * 2, r // 2))
+        pygame.draw.line(surf, color,
+                         (cx - r // 2, cy + r // 3 + r // 2),
+                         (cx + r // 2, cy + r // 3 + r // 2), max(1, r // 4))
+    elif suit_value == '♣':
+        cr = max(2, r // 2 - 1)
+        pygame.draw.circle(surf, color, (cx, cy - cr + 1), cr)
+        pygame.draw.circle(surf, color, (cx - cr, cy + cr // 2), cr)
+        pygame.draw.circle(surf, color, (cx + cr, cy + cr // 2), cr)
+        stem_w = max(1, cr // 2)
+        pygame.draw.rect(surf, color, (cx - stem_w, cy + cr, stem_w * 2, cr))
+        pygame.draw.line(surf, color,
+                         (cx - cr, cy + cr * 2),
+                         (cx + cr, cy + cr * 2), max(1, stem_w))
+
+
 def rounded_rect(surf, color, rect, r=10, border=0, bc=None):
     pygame.draw.rect(surf, color, rect, border_radius=r)
     if border:
