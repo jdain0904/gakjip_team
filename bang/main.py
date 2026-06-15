@@ -59,8 +59,8 @@ def main():
                         state = "game"
                         # Show first handoff if local mode
                         if game.needs_handoff():
-                            name    = game.consume_handoff()
-                            handoff = HandoffScreen(screen, name)
+                            info    = game.consume_handoff()
+                            handoff = HandoffScreen(screen, info)
                             state   = "handoff"
 
             # ── Handoff ───────────────────────────────────────────────────
@@ -81,8 +81,8 @@ def main():
             game.update(dt)
             # Check if handoff is needed after AI/auto step
             if game.needs_handoff():
-                name    = game.consume_handoff()
-                handoff = HandoffScreen(screen, name)
+                info    = game.consume_handoff()
+                handoff = HandoffScreen(screen, info)
                 state   = "handoff"
 
         # ── Draw ──────────────────────────────────────────────────────────

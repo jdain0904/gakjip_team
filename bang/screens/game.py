@@ -13,6 +13,7 @@ from characters import CHARACTERS, CharacterType
 from game_state import GameState, Phase, RespType
 from ai_agent import BangAI
 from ui_utils import draw_text, rounded_rect, Button, font
+from card_renderer import draw_game_card
 
 
 CARD_BROWN  = (100, 62, 20)
@@ -95,11 +96,23 @@ class GameScreen:
     def needs_handoff(self) -> bool:
         return self._need_handoff
 
-    def consume_handoff(self) -> str:
+    def consume_handoff(self) -> dict:
         self._need_handoff = False
         name = self._handoff_name
         self._handoff_name = ""
-        return name
+        p = next((pl for pl in self.gs.players if pl.name == name), None)
+        if p:
+            return {
+                "name":      p.name,
+                "role":      p.role,
+                "character": p.character,
+                "max_hp":    p.max_hp,
+            }
+        # fallback (shouldn't happen)
+        from roles import Role
+        from characters import CharacterType
+        return {"name": name, "role": Role.OUTLAW,
+                "character": CharacterType.BART_CASSIDY, "max_hp": 4}
 
     # ═════════════════════════════════════════════════════════════════════
     # Event handling
@@ -806,29 +819,9 @@ class GameScreen:
         return False
 
     def _draw_card(self, surf, card, x, y, selected, playable, discard_mode=False):
-        col = CARD_BLUE_C if card.is_blue else CARD_BROWN
-        r   = pygame.Rect(x, y, CARD_W, CARD_H)
-        pygame.draw.rect(surf, (8, 4, 2), r.move(3, 4), border_radius=8)
-        rounded_rect(surf, col, r, 8)
-        bc = GOLD if selected else (GREEN if playable else (RED if discard_mode else (150, 100, 40)))
-        pygame.draw.rect(surf, bc, r, 2, border_radius=8)
-        suit_col = RED if card.suit in (Suit.HEARTS, Suit.DIAMONDS) else WHITE
-        draw_text(surf, card.suit.value, "tiny", suit_col, x + 4, y + 3)
-        draw_text(surf, str(card.value), "tiny", suit_col, x + 4, y + 14)
-        name = card.name
-        if len(name) > 9:
-            mid = name.find(" ", len(name) // 2)
-            if mid == -1:
-                mid = len(name) // 2
-            draw_text(surf, name[:mid], "tiny", WHITE, x + CARD_W // 2, y + 44, "center")
-            draw_text(surf, name[mid:], "tiny", WHITE, x + CARD_W // 2, y + 58, "center")
-        else:
-            draw_text(surf, name, "small", WHITE, x + CARD_W // 2, y + 52, "center")
-        type_col = (50, 80, 160) if card.is_blue else (100, 55, 10)
-        badge    = pygame.Rect(x + 6, y + CARD_H - 22, CARD_W - 12, 16)
-        rounded_rect(surf, type_col, badge, 4)
-        draw_text(surf, "장착" if card.is_blue else "액션",
-                  "tiny", GRAY, badge.centerx, badge.centery, "center")
+        draw_game_card(surf, card, x, y, CARD_W, CARD_H,
+                       selected=selected, playable=playable,
+                       discard_mode=discard_mode)
 
     # ── Gen store overlay ─────────────────────────────────────────────────
     def _draw_gen_store_overlay(self):
