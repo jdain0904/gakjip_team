@@ -4,13 +4,94 @@ Three frame types:
   - Parchment (brown): play cards, role cards
   - Character: green dotted border, cream bg, sepia art area
   - Blue: light-blue bg, cornflower border (equipment/blue cards)
+
+Image replacement:
+  Place card images in bang/assets/cards/ — see README.txt for filenames.
+  When an image exists it is drawn directly (scaled to fit); otherwise the
+  programmatic fallback is used.
 """
 from __future__ import annotations
+import os
 import pygame
 import math
 from cards import Card, CardType
 from roles import Role
 from characters import CharacterType, CHARACTERS
+
+# ── Asset loading (lazy, cached) ─────────────────────────────────────────────
+_ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets", "cards")
+_img_cache: dict[str, pygame.Surface | None] = {}
+
+def _load(rel_path: str) -> pygame.Surface | None:
+    """Load image relative to assets/cards/; returns None if missing."""
+    if rel_path in _img_cache:
+        return _img_cache[rel_path]
+    full = os.path.join(_ASSET_DIR, rel_path)
+    if os.path.exists(full):
+        try:
+            img = pygame.image.load(full).convert_alpha()
+            _img_cache[rel_path] = img
+            return img
+        except Exception:
+            pass
+    _img_cache[rel_path] = None
+    return None
+
+def _blit_card_image(surf: pygame.Surface, img: pygame.Surface,
+                     rect: pygame.Rect):
+    """Scale img to rect and draw with rounded-corner clip."""
+    scaled = pygame.transform.smoothscale(img, (rect.w, rect.h))
+    surf.blit(scaled, rect.topleft)
+
+# Filename maps
+_GAME_CARD_FILE = {
+    CardType.BANG:        "bang.png",
+    CardType.MISSED:      "missed.png",
+    CardType.BEER:        "beer.png",
+    CardType.STAGECOACH:  "stagecoach.png",
+    CardType.WELLS_FARGO: "wells_fargo.png",
+    CardType.CAT_BALOU:   "cat_balou.png",
+    CardType.PANIC:       "panic.png",
+    CardType.INDIANS:     "indians.png",
+    CardType.GATLING:     "gatling.png",
+    CardType.SALOON:      "saloon.png",
+    CardType.GEN_STORE:   "gen_store.png",
+    CardType.DUEL:        "duel.png",
+    CardType.VOLCANIC:    "volcanic.png",
+    CardType.SCHOFIELD:   "schofield.png",
+    CardType.REMINGTON:   "remington.png",
+    CardType.CARABINE:    "carabine.png",
+    CardType.WINCHESTER:  "winchester.png",
+    CardType.BARREL:      "barrel.png",
+    CardType.SCOPE:       "scope.png",
+    CardType.MUSTANG:     "mustang.png",
+    CardType.JAIL:        "jail.png",
+    CardType.DYNAMITE:    "dynamite.png",
+}
+_ROLE_FILE = {
+    Role.SHERIFF:  "sheriff.png",
+    Role.DEPUTY:   "deputy.png",
+    Role.OUTLAW:   "outlaw.png",
+    Role.RENEGADE: "renegade.png",
+}
+_CHAR_FILE = {
+    CharacterType.BART_CASSIDY:   "bart_cassidy.png",
+    CharacterType.BLACK_JACK:     "black_jack.png",
+    CharacterType.CALAMITY_JANET: "calamity_janet.png",
+    CharacterType.EL_GRINGO:      "el_gringo.png",
+    CharacterType.JESSE_JONES:    "jesse_jones.png",
+    CharacterType.JOURDONNAIS:    "jourdonnais.png",
+    CharacterType.KIT_CARLSON:    "kit_carlson.png",
+    CharacterType.LUCKY_DUKE:     "lucky_duke.png",
+    CharacterType.PAUL_REGRET:    "paul_regret.png",
+    CharacterType.PEDRO_RAMIREZ:  "pedro_ramirez.png",
+    CharacterType.ROSE_DOOLAN:    "rose_doolan.png",
+    CharacterType.SID_KETCHUM:    "sid_ketchum.png",
+    CharacterType.SLAB_KILLER:    "slab_killer.png",
+    CharacterType.SUZY_LAFAYETTE: "suzy_lafayette.png",
+    CharacterType.VULTURE_SAM:    "vulture_sam.png",
+    CharacterType.WILLY_KID:      "willy_kid.png",
+}
 
 # ── Palette ──────────────────────────────────────────────────────────────────
 PARCHMENT     = (235, 215, 175)
@@ -245,6 +326,12 @@ def _draw_renegade_hat(surf, cx, cy, r):
 
 def draw_role_card(surf: pygame.Surface, role: Role, rect: pygame.Rect):
     from ui_utils import draw_text, font as get_font
+    # ── Image override ────────────────────────────────────────────────────
+    img = _load(os.path.join("roles", _ROLE_FILE[role]))
+    if img:
+        _blit_card_image(surf, img, rect)
+        return
+    # ── Programmatic fallback ─────────────────────────────────────────────
     draw_parchment_frame(surf, rect)
     x, y, w, h = rect
 
@@ -445,6 +532,12 @@ def draw_character_card(surf: pygame.Surface,
                         max_hp: int,
                         rect: pygame.Rect):
     from ui_utils import draw_text, font as get_font
+    # ── Image override ────────────────────────────────────────────────────
+    img = _load(os.path.join("characters", _CHAR_FILE[char]))
+    if img:
+        _blit_card_image(surf, img, rect)
+        return
+    # ── Programmatic fallback ─────────────────────────────────────────────
     draw_character_frame(surf, rect)
     x, y, w, h = rect
 
@@ -672,6 +765,7 @@ def draw_game_card(surf: pygame.Surface, card: Card,
                    face_down=False):
     """Draw a styled game card at (x, y) with size (w, h)."""
     from ui_utils import draw_text
+    from cards import Suit
     rect = pygame.Rect(x, y, w, h)
 
     if face_down:
@@ -683,6 +777,20 @@ def draw_game_card(surf: pygame.Surface, card: Card,
         pygame.draw.rect(surf, PARCHMENT, inner, border_radius=6)
         pygame.draw.rect(surf, BORDER_TAN, inner, 1, border_radius=6)
         return
+
+    # ── Image override ────────────────────────────────────────────────────
+    img = _load(os.path.join("game", _GAME_CARD_FILE[card.card_type]))
+    if img:
+        _blit_card_image(surf, img, rect)
+        # Draw selection highlight on top of image
+        if selected:
+            pygame.draw.rect(surf, (255, 215, 0), rect, 3, border_radius=10)
+        elif playable:
+            pygame.draw.rect(surf, (80, 175, 75), rect, 2, border_radius=10)
+        elif discard_mode:
+            pygame.draw.rect(surf, (190, 50, 40), rect, 2, border_radius=10)
+        return
+    # ── Programmatic fallback ─────────────────────────────────────────────
 
     if card.is_blue:
         draw_blue_frame(surf, rect)
