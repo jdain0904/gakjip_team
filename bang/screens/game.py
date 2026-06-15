@@ -45,13 +45,14 @@ class GameScreen:
     LOG_MAX      = 22
     CARD_SPACING = 90
 
-    def __init__(self, screen: pygame.Surface, gs: GameState):
+    def __init__(self, screen: pygame.Surface, gs: GameState, ai_difficulty: int = 1):
         self.screen = screen
         self.gs     = gs
         self.anims: list[CardAnim] = []
 
         self.ai: dict[int, BangAI] = {
-            i: BangAI(i) for i in range(gs.num_players) if i not in gs.human_ids
+            i: BangAI(i, difficulty=ai_difficulty)
+            for i in range(gs.num_players) if i not in gs.human_ids
         }
         self.ai_timer = 0
 
@@ -534,6 +535,7 @@ class GameScreen:
         gs = self.gs
         self._deselect()
         if gs.phase == Phase.GAME_OVER:
+            self._notify_ai_game_over()
             return
         if gs.mode == "local":
             if gs.phase in (Phase.DRAW, Phase.DYNAMITE, Phase.JAIL,
@@ -552,6 +554,19 @@ class GameScreen:
                 if r >= 0 and gs.players[r].is_human:
                     self._need_handoff = True
                     self._handoff_name = gs.players[r].name
+
+    def _notify_ai_game_over(self):
+        """Update Hard AI learning weights based on game outcome."""
+        from roles import Role
+        gs = self.gs
+        if gs.winner_role is None:
+            return
+        for pid, ai in self.ai.items():
+            p   = gs.players[pid]
+            won = (p.role == gs.winner_role or
+                   (p.role == Role.DEPUTY and gs.winner_role == Role.SHERIFF) or
+                   (p.role == Role.SHERIFF and gs.winner_role == Role.SHERIFF))
+            ai.record_game_result(won)
 
     def _deselect(self):
         self.selected_card_idx = -1
@@ -778,6 +793,10 @@ class GameScreen:
             show_pid = gs.current_pid
 
         if show_pid < 0 or not gs.players[show_pid].alive:
+            return
+
+        # Don't reveal AI players' cards to humans
+        if show_pid not in gs.human_ids:
             return
 
         p  = gs.players[show_pid]

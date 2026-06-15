@@ -18,11 +18,20 @@ ROLE_COUNTS = {
 }
 
 
+DIFFICULTY_LABELS = ["쉬움", "보통", "어려움"]
+DIFFICULTY_COLORS = [
+    (50, 140, 70),    # green  – easy
+    (60, 100, 180),   # blue   – medium
+    (160, 50, 50),    # red    – hard
+]
+
+
 class SetupScreen:
     def __init__(self, screen: pygame.Surface, mode: str):
         self.screen = screen
         self.mode   = mode      # 'local' | 'ai'
         self.n      = 4
+        self.ai_difficulty = 1   # 0=쉬움 1=보통 2=어려움
         # For AI mode: only player 0 is human by default
         self.human_ids: list[int] = list(range(self.n)) if mode == "local" else [0]
         self._build_buttons()
@@ -34,12 +43,24 @@ class SetupScreen:
         self.btn_start = Button((cx - 120, WIN_H - 90, 240, 54), "게임 시작!", GREEN,
                                 radius=12, fkey="sub")
         self.btn_back  = Button((30, WIN_H - 90, 100, 40), "← 뒤로", DIM, radius=8)
+        # Difficulty buttons (AI mode only)
+        self.diff_btns: list[Button] = []
+        if self.mode == "ai":
+            bw, bh, gap = 100, 38, 10
+            total = len(DIFFICULTY_LABELS) * bw + (len(DIFFICULTY_LABELS) - 1) * gap
+            sx = cx - total // 2
+            for di, lbl in enumerate(DIFFICULTY_LABELS):
+                col = DIFFICULTY_COLORS[di]
+                self.diff_btns.append(
+                    Button((sx + di * (bw + gap), 292, bw, bh), lbl, col, radius=8)
+                )
         self._rebuild_toggles()
 
     def _rebuild_toggles(self):
         self.toggles: list[tuple[int, Button]] = []
         span = self.n * 125
         sx   = WIN_W // 2 - span // 2
+        ty   = 350 if self.mode == "ai" else 330
         for i in range(self.n):
             if self.mode == "local":
                 label = f"P{i+1}  사람"
@@ -48,7 +69,7 @@ class SetupScreen:
                 is_h  = i in self.human_ids
                 label = f"P{i+1} {'사람' if is_h else 'AI'}"
                 col   = BLUE if is_h else (80, 80, 90)
-            btn = Button((sx + i * 125, 330, 115, 48), label, col, radius=8)
+            btn = Button((sx + i * 125, ty, 115, 48), label, col, radius=8)
             self.toggles.append((i, btn))
 
     def handle(self, event) -> dict | None:
@@ -71,6 +92,10 @@ class SetupScreen:
             self._build_buttons()
 
         if self.mode == "ai":
+            for di, dbtn in enumerate(self.diff_btns):
+                if dbtn.clicked(event, pos):
+                    self.ai_difficulty = di
+                    break
             for idx, btn in self.toggles:
                 if btn.clicked(event, pos) and idx != 0:  # P1 always human in AI mode
                     if idx in self.human_ids:
@@ -87,11 +112,12 @@ class SetupScreen:
                 names = _DEFAULT_NAMES_AI[:self.n]
                 human_ids = self.human_ids
             return {
-                "action": "start",
-                "n": self.n,
-                "human_ids": human_ids,
-                "names": names,
-                "mode": self.mode,
+                "action":        "start",
+                "n":             self.n,
+                "human_ids":     human_ids,
+                "names":         names,
+                "mode":          self.mode,
+                "ai_difficulty": self.ai_difficulty,
             }
         return None
 
@@ -115,10 +141,19 @@ class SetupScreen:
         # Role composition
         draw_text(s, ROLE_COUNTS[self.n], "tiny", (160, 140, 80), cx, 258, "center")
 
-        # Player type toggles
+        # Difficulty selector + player type toggles (AI mode)
         if self.mode == "ai":
+            draw_text(s, "AI 난이도", "small", GRAY, cx, 272, "center")
+            for di, dbtn in enumerate(self.diff_btns):
+                dbtn.draw(s, dbtn.is_hovered(pos))
+                if di == self.ai_difficulty:
+                    r = pygame.Rect(dbtn.rect)
+                    pygame.draw.rect(s, (255, 220, 80), r, 3, border_radius=8)
+            diff_descs = ["AI가 무작위로 행동합니다", "균형 잡힌 전략으로 행동합니다",
+                          "최적 전략 + 경험으로 학습합니다"]
+            draw_text(s, diff_descs[self.ai_difficulty], "tiny", GOLD, cx, 338, "center")
             draw_text(s, "클릭으로 사람 / AI 전환  (P1은 항상 사람)", "small",
-                      GRAY, cx, 304, "center")
+                      GRAY, cx, 358, "center")
         else:
             draw_text(s, "로컬 플레이: 모든 플레이어 같은 화면 사용", "small",
                       GRAY, cx, 304, "center")
@@ -127,7 +162,7 @@ class SetupScreen:
             btn.draw(s, btn.is_hovered(pos))
 
         # Rules summary
-        ry = 408
+        ry = 418
         rounded_rect(s, PANEL_BG, pygame.Rect(cx - 340, ry, 680, 200), 12)
         rules = [
             ("목표",   "역할에 따라 다른 승리 조건 달성"),

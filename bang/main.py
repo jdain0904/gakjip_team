@@ -55,7 +55,8 @@ def main():
                             mode=result["mode"],
                             names=result["names"],
                         )
-                        game  = GameScreen(screen, gs)
+                        game  = GameScreen(screen, gs,
+                                           ai_difficulty=result.get("ai_difficulty", 1))
                         state = "game"
                         # Show first handoff if local mode
                         if game.needs_handoff():
