@@ -156,7 +156,7 @@ def build_deck() -> list[Card]:
 
     # Stagecoach – 2
     add(T.STAGECOACH, S.SPADES, 9)
-    add(T.STAGECOACH, S.SPADES, 9)
+    add(T.STAGECOACH, S.CLUBS,  9)
 
     # Wells Fargo – 1
     add(T.WELLS_FARGO, S.HEARTS, 3)
@@ -190,7 +190,6 @@ def build_deck() -> list[Card]:
     add(T.CARABINE,  S.DIAMONDS, 1)
     add(T.WINCHESTER,S.SPADES,  8)
     add(T.BARREL,    S.SPADES, 12); add(T.BARREL,    S.SPADES, 13)
-    add(T.SCOPE,     S.SPADES, 13)
     add(T.MUSTANG,   S.HEARTS,  8); add(T.MUSTANG,   S.HEARTS,  9)
     add(T.JAIL,      S.SPADES, 11); add(T.JAIL,      S.SPADES, 12); add(T.JAIL, S.HEARTS, 4)
     add(T.DYNAMITE,  S.HEARTS,  2)
