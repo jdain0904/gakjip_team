@@ -661,7 +661,10 @@ class GameScreen:
             pygame.draw.circle(s, base, (px, py), R, 3 if p.alive else 1)
 
             if not p.alive:
-                draw_text(s, "✕", "large", (100, 50, 50), px, py, "center")
+                # Draw X using lines (no unicode needed)
+                xr = 10
+                pygame.draw.line(s, (100, 50, 50), (px - xr, py - xr), (px + xr, py + xr), 3)
+                pygame.draw.line(s, (100, 50, 50), (px + xr, py - xr), (px - xr, py + xr), 3)
             else:
                 draw_text(s, f"P{pid+1}", "small", WHITE, px, py - 8, "center")
 
@@ -937,10 +940,14 @@ class GameScreen:
             if gs.discard:
                 top = gs.discard[-1]
                 from cards import Suit
+                from ui_utils import draw_suit_icon
                 suit_col = (190, 45, 38) if top.suit in (Suit.HEARTS, Suit.DIAMONDS) else (230, 220, 200)
                 val_str = {1: "A", 11: "J", 12: "Q", 13: "K"}.get(top.value, str(top.value))
-                draw_text(s, f"[ {top.name}  {top.suit.value}{val_str} ]",
-                          "sub", suit_col, cx, panel.y + 76, "center")
+                # Draw card info: name + suit icon + value, centered
+                icon_y = panel.y + 76
+                left_r  = draw_text(s, f"[ {top.name}", "sub", suit_col, cx - 10, icon_y, "right")
+                draw_suit_icon(s, top.suit.value, cx - 2, icon_y, 14, suit_col)
+                draw_text(s, f"{val_str} ]", "sub", suit_col, cx + 8, icon_y, "left")
             else:
                 draw_text(s, "(버림더미 비어있음)", "small", GRAY, cx, panel.y + 76, "center")
 
