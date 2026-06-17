@@ -3,7 +3,7 @@ from __future__ import annotations
 import math, pygame
 from constants import (
     BG, PANEL_BG, PANEL_DARK, WHITE, GRAY, GOLD, RED, GREEN, DIM,
-    BLUE, PURPLE, ACCENT, YELLOW, ORANGE, DARK_RED,
+    BLUE, PURPLE, ACCENT, ORANGE, DARK_RED,
     ROLE_COLORS, CARD_W, CARD_H, BOARD_CX, BOARD_CY, PLAYER_RADIUS,
     WIN_W, WIN_H, AI_STEP_MS,
     BG_TOP, BG_BOTTOM, WOOD_DRK, WOOD_LGT, FELT_DRK, FELT_LGT,
@@ -17,7 +17,7 @@ from ai_probability import CardCounter
 from ai_strategy import score_play_actions, rank_of_action
 import player_skill
 from ui_utils import draw_text, rounded_rect, Button, font, vertical_gradient, radial_vignette
-from card_renderer import draw_game_card
+from card_renderer import draw_game_card, draw_character_card, draw_heart
 
 
 CARD_BROWN  = (100, 62, 20)
@@ -101,6 +101,7 @@ class GameScreen:
         self.gs     = gs
         self.card_popup: PlayedCardPopup | None = None
         self._anim_clock = 0
+        self._hover_pid: int | None = None
 
         self.ai: dict[int, BangAI] = {
             i: BangAI(i, difficulty=ai_difficulty)
@@ -122,6 +123,18 @@ class GameScreen:
         self._panel_grad = vertical_gradient(
             WIN_W - self.RIGHT_X + 6, WIN_H,
             tuple(min(255, c + 12) for c in PANEL_BG), PANEL_DARK)
+
+        # Pre-rendered character cards for the avatar hover tooltip (static
+        # per player for the whole game, so build once instead of per frame).
+        self._char_card_surfs: dict[int, pygame.Surface] = {}
+        self.TIP_CARD_W, self.TIP_CARD_H = 150, 211
+        for pid, pl in enumerate(gs.players):
+            if pl.character is None:
+                continue
+            surf = pygame.Surface((self.TIP_CARD_W, self.TIP_CARD_H), pygame.SRCALPHA)
+            draw_character_card(surf, pl.character, pl.max_hp,
+                                pygame.Rect(0, 0, self.TIP_CARD_W, self.TIP_CARD_H))
+            self._char_card_surfs[pid] = surf
 
         self.btn_menu    = Button((WIN_W - 118, 8, 108, 34), "← 메뉴", DIM, radius=7)
         self.btn_endturn = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
@@ -725,6 +738,7 @@ class GameScreen:
         s = self.screen
         s.blit(self._bg_surf, (0, 0))
         self._draw_board()
+        self._draw_deck_discard()
         self._draw_players()
         self._draw_right_panel()
         self._draw_hand_area()
@@ -732,6 +746,9 @@ class GameScreen:
         self._draw_kit_peek_overlay()
         self._draw_char_draw_overlay()
         self._draw_phase_banner()
+        if (self._hover_pid is not None and self.gs.phase not in
+                (Phase.GEN_STORE, Phase.KIT_PEEK, Phase.CHAR_DRAW, Phase.GAME_OVER)):
+            self._draw_player_tooltip(self._hover_pid)
         if self.card_popup:
             self.card_popup.draw(s)
         if self.gs.phase == Phase.GAME_OVER:
@@ -743,11 +760,46 @@ class GameScreen:
     def _draw_board(self):
         self.screen.blit(self._board_surf, self._board_pos)
 
+    def _draw_deck_discard(self):
+        """Draw pile (center-left) + discard pile (center-right) on the felt."""
+        s, gs = self.screen, self.gs
+        dw, dh = int(CARD_W * 0.85), int(CARD_H * 0.85)
+        gap = 20
+        deck_x = BOARD_CX - dw - gap // 2
+        disc_x = BOARD_CX + gap // 2
+        y = BOARD_CY - dh // 2
+
+        n_deck = len(gs.deck)
+        if n_deck > 0:
+            layers = 3 if n_deck > 8 else (2 if n_deck > 2 else 1)
+            for i in range(layers - 1, -1, -1):
+                off = i * 2
+                draw_game_card(s, None, deck_x - off, y - off, dw, dh, face_down=True)
+        else:
+            rect = pygame.Rect(deck_x, y, dw, dh)
+            rounded_rect(s, (20, 14, 6), rect, 8)
+            pygame.draw.rect(s, DIM, rect, 2, border_radius=8)
+        draw_text(s, f"덱 {n_deck}장", "tiny", GOLD, deck_x + dw // 2, y + dh + 8, "center")
+
+        n_disc = len(gs.discard)
+        if n_disc > 0:
+            layers = 3 if n_disc > 8 else (2 if n_disc > 2 else 1)
+            for i in range(layers - 1, 0, -1):
+                off = i * 2
+                draw_game_card(s, None, disc_x + off, y - off, dw, dh, face_down=True)
+            draw_game_card(s, gs.discard[-1], disc_x, y, dw, dh)
+        else:
+            rect = pygame.Rect(disc_x, y, dw, dh)
+            rounded_rect(s, (20, 14, 6), rect, 8)
+            pygame.draw.rect(s, DIM, rect, 2, border_radius=8)
+        draw_text(s, f"버림 {n_disc}장", "tiny", GOLD, disc_x + dw // 2, y + dh + 8, "center")
+
     def _draw_players(self):
         s   = self.screen
         gs  = self.gs
         pos = pygame.mouse.get_pos()
         pulse = (math.sin(self._anim_clock / 260.0) + 1) / 2   # 0..1 breathing glow
+        self._hover_pid = None
 
         for pid, (px, py) in self._player_positions.items():
             p   = gs.players[pid]
@@ -761,6 +813,9 @@ class GameScreen:
             is_target    = pid in self.target_candidates
 
             R = 42
+            hovered = p.alive and math.hypot(pos[0] - px, pos[1] - py) <= R + 8
+            if hovered:
+                self._hover_pid = pid
             glow_k = 0.32 + 0.22 * pulse
             # Glows
             if is_active:
@@ -784,6 +839,8 @@ class GameScreen:
                 sheen = pygame.Rect(px - R + 5, py - R + 5, (R - 5) * 2, (R - 5) * 2)
                 pygame.draw.arc(s, tuple(min(255, c + 55) for c in base),
                                 sheen, math.radians(110), math.radians(195), 2)
+            if hovered:
+                pygame.draw.circle(s, WHITE, (px, py), R + 5, 2)
 
             if not p.alive:
                 # Draw X using lines (no unicode needed)
@@ -815,13 +872,6 @@ class GameScreen:
 
             self._draw_hp(s, px, py - R - 22, p)
 
-            # Hand count badge
-            if p.alive:
-                badge = pygame.Rect(px + R - 12, py - R - 12, 26, 20)
-                rounded_rect(s, PANEL_DARK, badge, 5)
-                draw_text(s, str(len(p.hand)), "tiny", YELLOW,
-                          badge.centerx, badge.centery, "center")
-
             # Equipment icons
             eq_x = px - len(p.equipment) * 14
             eq_y = plate.bottom + 6
@@ -833,15 +883,77 @@ class GameScreen:
                           eq_r.centerx, eq_r.centery, "center")
 
     def _draw_hp(self, s, cx, cy, player):
-        r  = 7
-        tw = player.max_hp * (r * 2 + 3) - 3
-        sx = cx - tw // 2
+        r   = 8
+        gap = 4
+        tw  = player.max_hp * (r * 2 + gap) - gap
+        sx  = cx - tw // 2 + r
         for i in range(player.max_hp):
-            col = HP_ON if i < player.hp else HP_OFF
-            bx  = sx + i * (r * 2 + 3) + r
-            pygame.draw.circle(s, col, (bx, cy), r)
-            if i < player.hp:
-                pygame.draw.circle(s, (240, 90, 80), (bx, cy), r, 1)
+            on = i < player.hp
+            bx = sx + i * (r * 2 + gap)
+            draw_heart(s, bx, cy, r, HP_ON if on else HP_OFF)
+            if on:
+                draw_heart(s, bx, cy, r, (240, 110, 100), filled=False)
+
+    # ── Avatar hover tooltip (character card + UNO-style hand fan) ─────────
+    def _draw_player_tooltip(self, pid: int):
+        s, gs = self.screen, self.gs
+        p = gs.players[pid]
+        px, py = self._player_positions[pid]
+
+        cw, ch = self.TIP_CARD_W, self.TIP_CARD_H
+        pad = 12
+        name_h, fan_label_h, fan_h = 24, 16, 50
+        panel_w = cw + pad * 2
+        panel_h = pad + name_h + ch + 10 + fan_label_h + 18 + fan_h + pad
+
+        bx = px - panel_w // 2
+        by = py - 50 - panel_h
+        if by < 6:
+            by = py + 50
+        bx = max(6, min(WIN_W - panel_w - 6, bx))
+        by = max(6, min(WIN_H - panel_h - 6, by))
+
+        panel = pygame.Rect(bx, by, panel_w, panel_h)
+        shadow = panel.inflate(8, 8).move(0, 5)
+        rounded_rect(s, (8, 5, 2), shadow, 14)
+        rounded_rect(s, PANEL_BG, panel, 14)
+        pygame.draw.rect(s, GOLD, panel, 2, border_radius=14)
+
+        draw_text(s, p.name, "small", GOLD, panel.centerx, panel.y + pad, "center")
+
+        card_x = panel.centerx - cw // 2
+        card_y = panel.y + pad + name_h
+        char_surf = self._char_card_surfs.get(pid)
+        if char_surf:
+            s.blit(char_surf, (card_x, card_y))
+
+        fan_label_y = card_y + ch + 10
+        draw_text(s, f"손패 {len(p.hand)}장", "tiny", WHITE,
+                  panel.centerx, fan_label_y, "center")
+        self._draw_hand_fan(s, len(p.hand), panel.centerx, fan_label_y + 18)
+
+    def _draw_hand_fan(self, surf, n, cx, top_y):
+        """UNO-mobile-style fan of face-down mini cards + a count badge."""
+        mini_w, mini_h = 30, 42
+        if n == 0:
+            draw_text(surf, "(없음)", "tiny", DIM, cx, top_y + mini_h // 2, "center")
+            return
+        shown   = min(n, 6)
+        spacing = 14
+        fan_w   = mini_w + (shown - 1) * spacing
+        badge_r = 13
+        total_w = fan_w + 10 + badge_r * 2
+        sx = cx - total_w // 2
+        for i in range(shown):
+            t   = i / (shown - 1) if shown > 1 else 0.5
+            bow = int(6 * (1 - (2 * t - 1) ** 2))
+            draw_game_card(surf, None, sx + i * spacing, top_y - bow,
+                           mini_w, mini_h, face_down=True)
+        bx = sx + fan_w + 10 + badge_r
+        by = top_y + mini_h // 2
+        pygame.draw.circle(surf, (205, 40, 35), (bx, by), badge_r)
+        pygame.draw.circle(surf, WHITE, (bx, by), badge_r, 2)
+        draw_text(surf, str(n), "tiny", WHITE, bx, by, "center")
 
     # ── Right panel ───────────────────────────────────────────────────────
     def _draw_right_panel(self):

@@ -507,9 +507,8 @@ def _draw_char_icon(surf, char: CharacterType, cx, cy, r):
         pygame.draw.line(surf, dark, (cx - 22, cy + 4), (cx - 14, cy + 14), 2)
 
 
-def draw_heart(surf, cx, cy, r):
-    """Draw a small heart shape."""
-    red = (200, 50, 45)
+def draw_heart(surf, cx, cy, r, color=(200, 50, 45), filled=True):
+    """Draw a small heart shape (filled, or outline-only when filled=False)."""
     pts = []
     for deg in range(0, 360, 8):
         t = math.radians(deg)
@@ -518,7 +517,10 @@ def draw_heart(surf, cx, cy, r):
                    2 * math.cos(3 * t) - math.cos(4 * t)) / 16
         pts.append((cx + hx, cy + hy))
     if len(pts) >= 3:
-        pygame.draw.polygon(surf, red, pts)
+        if filled:
+            pygame.draw.polygon(surf, color, pts)
+        else:
+            pygame.draw.polygon(surf, color, pts, 2)
 
 
 def draw_text_tiny(surf, text, color, x, y):

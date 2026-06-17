@@ -140,6 +140,7 @@ class GameState:
             self.deck = self.discard
             self.discard = [top]
             random.shuffle(self.deck)
+            self.log_msg("🔄 덱 소진 — 버림더미를 섞어 새 덱 생성")
         return self.deck.pop() if self.deck else None
 
     def _flip(self, pid: int = -1) -> Optional[Card]:
