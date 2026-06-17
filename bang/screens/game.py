@@ -11,7 +11,10 @@ from cards import CardType, Suit
 from roles import Role
 from characters import CHARACTERS, CharacterType
 from game_state import GameState, Phase, RespType
-from ai_agent import BangAI
+from ai_agent import BangAI, _default_w
+from ai_probability import CardCounter
+from ai_strategy import score_play_actions, rank_of_action
+import player_skill
 from ui_utils import draw_text, rounded_rect, Button, font
 from card_renderer import draw_game_card
 
@@ -227,13 +230,36 @@ class GameScreen:
                 self.target_mode = True
                 self.target_candidates = tgts
             else:
+                self._score_human_play(pid, card)
                 gs.play_card(pid, ci)
                 self._on_phase_change()
 
     def _exec_with_target(self, pid, card_idx, target_id):
+        card = self.gs.players[pid].hand[card_idx]
+        self._score_human_play(pid, card, target_id)
         self.gs.play_card(pid, card_idx, target_id=target_id, target_card_idx=0)
         self._deselect()
         self._on_phase_change()
+
+    def _score_human_play(self, pid: int, card, target_id: int = -1):
+        """Rank the human's chosen play against the full EV-scored option list
+        and feed the result into player_skill.json, which drives how close
+        to optimal the Medium AI plays (see ai_agent.BangAI._action_scored).
+        """
+        if not self.ai:
+            return
+        gs      = self.gs
+        helper  = BangAI(pid)
+        counter = CardCounter(gs, pid)
+        ranked  = score_play_actions(gs, pid, counter, _default_w,
+                                      set(helper._known_enemies(gs)), helper._known_allies(gs))
+
+        ct = card.card_type
+        if ct == CardType.MISSED and gs.players[pid].is_calamity_janet():
+            ct = CardType.BANG
+        rank  = rank_of_action(ranked, ct, target_id)
+        state = player_skill.update_skill(player_skill.load_skill(), rank, len(ranked))
+        player_skill.save_skill(state)
 
     # ── RESPONSE ──────────────────────────────────────────────────────────
     def _handle_response(self, event, pos, pid):

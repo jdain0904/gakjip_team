@@ -845,10 +845,15 @@ class GameState:
             self._finish_response(hit=True)
         elif resume == "duel":
             self.duel_challenger = self.duel_other = self.duel_current = -1
-            self.phase = Phase.PLAY
+            if self.players[self.current_pid].alive:
+                self.phase = Phase.PLAY
+            else:
+                self._advance_turn()
         elif resume == "dynamite":
             if self.players[self.current_pid].alive:
                 self._enter_draw_phase()
+            else:
+                self._advance_turn()
         else:
             self.phase = Phase.PLAY
 

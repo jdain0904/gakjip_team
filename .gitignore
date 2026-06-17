@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Runtime-persisted AI learning/skill state (regenerated on first run)
+bang/ai_weights.json
+bang/player_skill.json
