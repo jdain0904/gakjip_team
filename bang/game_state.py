@@ -632,8 +632,13 @@ class GameState:
             self.log_msg(f"● 감옥: {p.name} > {target.name}")
             return True
         p.hand.pop(card_idx)
-        p.equip(card)
-        self.log_msg(f"● {p.name} [{card.name}] 장착")
+        displaced = p.equip(card)
+        self.discard.extend(displaced)
+        if displaced:
+            old_names = ", ".join(c.name for c in displaced)
+            self.log_msg(f"● {p.name} [{card.name}] 장착 (기존 [{old_names}] 버림)")
+        else:
+            self.log_msg(f"● {p.name} [{card.name}] 장착")
         return True
 
     # ── Sid Ketchum active ability ─────────────────────────────────────────
@@ -699,7 +704,8 @@ class GameState:
 
     def check_barrel(self) -> bool:
         p = self.players[self.resp_current]
-        if not p.has_barrel() or self.barrel_checked:
+        # Official rule: "Neither Missed! nor Barrel have effect" against Indians!
+        if self.resp_type == RespType.INDIANS or not p.has_barrel() or self.barrel_checked:
             return False
         self.barrel_checked = True
         flipped = self._flip(self.resp_current)

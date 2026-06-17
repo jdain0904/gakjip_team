@@ -140,6 +140,8 @@ class GameScreen:
                                   "턴 종료", ACCENT, radius=9, fkey="normal")
         self.btn_takeit  = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
                                   "맞겠습니다", RED, radius=9, fkey="normal")
+        self.btn_barrel  = Button((self.RIGHT_X + 5, WIN_H - 105, 185, 44),
+                                  "나무통 시도", (110, 76, 28), radius=9, fkey="normal")
         self.btn_beer    = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
                                   "맥주 사용", GREEN, radius=9, fkey="normal")
         self.btn_die     = Button((self.RIGHT_X + 200, WIN_H - 55, 140, 44),
@@ -321,13 +323,17 @@ class GameScreen:
         gs = self.gs
         if gs.resp_current != pid:
             return
-        if not gs.barrel_checked and gs.players[pid].has_barrel():
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                saved = gs.check_barrel()
-                if saved:
-                    self._on_phase_change()
-            return
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+            return
+        # The Barrel draw is optional ("you may try"), not mandatory, and
+        # doesn't apply against Indians! — so it must be its own button, not
+        # something that silently eats whatever the player's first click was
+        # meant for (that used to make the real card click look unresponsive).
+        if (gs.resp_type != RespType.INDIANS and not gs.barrel_checked
+                and gs.players[pid].has_barrel() and self.btn_barrel.clicked(event, pos)):
+            saved = gs.check_barrel()
+            if saved:
+                self._on_phase_change()
             return
         if self.btn_takeit.clicked(event, pos):
             gs.respond_take_hit()
@@ -548,7 +554,8 @@ class GameScreen:
             pid = gs.resp_current
             if pid < 0 or pid not in self.ai:
                 return
-            if not gs.barrel_checked and gs.players[pid].has_barrel():
+            if (gs.resp_type != RespType.INDIANS and not gs.barrel_checked
+                    and gs.players[pid].has_barrel()):
                 gs.check_barrel()
                 return
             action = self.ai[pid].choose_response(gs)
@@ -797,17 +804,39 @@ class GameScreen:
             return -1
         return show_pid
 
+    def _role_reveal_pids(self) -> set:
+        """Players whose own (otherwise-secret) role should be shown right
+        now, on top of anyone already revealed (Sheriff, eliminated).
+
+        Solo vs AI: the one human always sees their own role — it's their
+        own information, not something they need to "discover" by acting.
+        Local hotseat: everyone is human, so revealing all roles all the
+        time would spoil the secret for whoever is glancing at the shared
+        screen; only the player whose turn/response it currently is gets
+        to see their own role, mirroring _human_viewer_pid().
+        """
+        gs = self.gs
+        if len(gs.human_ids) <= 1:
+            return set(gs.human_ids)
+        vp = self._human_viewer_pid()
+        return {vp} if vp >= 0 else set()
+
     def _draw_players(self):
         s   = self.screen
         gs  = self.gs
         pos = pygame.mouse.get_pos()
         pulse = (math.sin(self._anim_clock / 260.0) + 1) / 2   # 0..1 breathing glow
         self._hover_pid = None
-        viewer_pid = self._human_viewer_pid()
+        viewer_pid  = self._human_viewer_pid()
+        reveal_pids = self._role_reveal_pids()
 
         for pid, (px, py) in self._player_positions.items():
-            p   = gs.players[pid]
-            col = ROLE_COLORS.get(p.role.value, GRAY) if p.role_revealed else GRAY
+            p      = gs.players[pid]
+            # You always know your own role — only other players' roles stay
+            # hidden until revealed (official rule: "look at your role but
+            # keep it secret", which only restricts what others can see).
+            reveal = p.role_revealed or pid in reveal_pids
+            col = ROLE_COLORS.get(p.role.value, GRAY) if reveal else GRAY
             dim = 1.0 if p.alive else 0.35
 
             is_active    = (pid == gs.current_pid and gs.phase not in
@@ -855,7 +884,7 @@ class GameScreen:
                 draw_text(s, f"P{pid+1}", "small", WHITE, px, py - 8, "center")
 
             # Nameplate panel (sized to fit the text it holds)
-            role_lbl = p.role.value if p.role_revealed else "?"
+            role_lbl = p.role.value if reveal else "?"
             char_lbl = CHARACTERS[p.character].name_ko if p.character else None
             dist     = gs.distance(viewer_pid, pid) if (p.alive and pid != viewer_pid
                                                          and viewer_pid >= 0) else None
@@ -873,7 +902,7 @@ class GameScreen:
             ly = plate.y + 7
             draw_text(s, p.name, "tiny", col if p.alive else GRAY, px, ly, "center")
             ly += 14
-            draw_text(s, role_lbl, "tiny", col if p.role_revealed else DIM, px, ly, "center")
+            draw_text(s, role_lbl, "tiny", col if reveal else DIM, px, ly, "center")
             if char_lbl:
                 ly += 14
                 draw_text(s, char_lbl, "tiny", (190, 165, 100), px, ly, "center")
@@ -1012,10 +1041,12 @@ class GameScreen:
         s.blit(self._panel_grad, (rx - 6, 0))
         pygame.draw.line(s, (70, 46, 18), (rx - 6, 0), (rx - 6, WIN_H), 2)
 
+        reveal_pids = self._role_reveal_pids()
+
         if gs.phase not in (Phase.GAME_OVER,):
             pid = gs.current_pid
             col = ROLE_COLORS.get(gs.players[pid].role.value, ACCENT) \
-                if gs.players[pid].role_revealed else ACCENT
+                if (gs.players[pid].role_revealed or pid in reveal_pids) else ACCENT
             banner = pygame.Rect(rx, 8, WIN_W - rx - 10, 36)
             shadow = banner.inflate(4, 4).move(0, 2)
             rounded_rect(s, (10, 6, 2), shadow, 9)
@@ -1027,7 +1058,8 @@ class GameScreen:
 
         py2 = 54
         for pid, p in enumerate(gs.players):
-            col   = ROLE_COLORS.get(p.role.value, GRAY) if p.role_revealed else GRAY
+            reveal = p.role_revealed or pid in reveal_pids
+            col   = ROLE_COLORS.get(p.role.value, GRAY) if reveal else GRAY
             h     = 58
             bg_c  = (35, 22, 8) if p.alive else (20, 14, 6)
             row   = pygame.Rect(rx, py2, WIN_W - rx - 8, h)
@@ -1043,7 +1075,7 @@ class GameScreen:
                 pygame.draw.circle(s, (235, 225, 200), (rx + 14, py2 + h // 2 - 2), 2)
             draw_text(s, p.name, "small", WHITE if p.alive else GRAY, rx + 28, py2 + 4)
 
-            role_lbl = p.role.value if p.role_revealed else "?"
+            role_lbl = p.role.value if reveal else "?"
             char_lbl = CHARACTERS[p.character].name_ko if p.character else ""
             draw_text(s, f"{role_lbl}  {char_lbl}", "tiny", col, rx + 28, py2 + 22)
 
@@ -1127,6 +1159,9 @@ class GameScreen:
             self.btn_endturn.draw(s, self.btn_endturn.is_hovered(pos))
         if gs.phase in (Phase.RESPONSE, Phase.DUEL):
             self.btn_takeit.draw(s, self.btn_takeit.is_hovered(pos))
+        if (gs.phase == Phase.RESPONSE and gs.resp_type != RespType.INDIANS
+                and not gs.barrel_checked and p.has_barrel()):
+            self.btn_barrel.draw(s, self.btn_barrel.is_hovered(pos))
         if gs.phase == Phase.BEER_SAVE:
             self.btn_beer.draw(s, self.btn_beer.is_hovered(pos))
             self.btn_die.draw(s, self.btn_die.is_hovered(pos))

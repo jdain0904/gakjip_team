@@ -98,11 +98,15 @@ class Player:
                     if c.card_type in (CardType.BANG, CardType.MISSED)]
         return [i for i, c in enumerate(self.hand) if c.card_type == CardType.BANG]
 
-    def equip(self, card: Card):
-        if card.is_gun:
-            self.equipment = [c for c in self.equipment if not c.is_gun]
-        self.equipment = [c for c in self.equipment if c.card_type != card.card_type]
+    def equip(self, card: Card) -> list[Card]:
+        """Equip `card`. Returns any equipment it bumps out of play (a new
+        weapon replaces the old one, a card can't share a name with one
+        already in play) — caller must move these to the discard pile."""
+        removed = [c for c in self.equipment
+                   if (card.is_gun and c.is_gun) or c.card_type == card.card_type]
+        self.equipment = [c for c in self.equipment if c not in removed]
         self.equipment.append(card)
+        return removed
 
     def remove_equipment(self, card: Card):
         if card in self.equipment:
