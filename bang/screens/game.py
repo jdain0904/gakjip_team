@@ -12,10 +12,7 @@ from cards import CardType, Suit
 from roles import Role
 from characters import CHARACTERS, CharacterType
 from game_state import GameState, Phase, RespType
-from ai_agent import BangAI, _default_w
-from ai_probability import CardCounter
-from ai_strategy import score_play_actions, rank_of_action
-import player_skill
+from ai_agent import BangAI
 from ui_utils import draw_text, rounded_rect, Button, font, vertical_gradient, radial_vignette
 from card_renderer import draw_game_card, draw_character_card, draw_heart
 
@@ -302,38 +299,16 @@ class GameScreen:
                 self.target_mode = True
                 self.target_candidates = tgts
             else:
-                self._score_human_play(pid, card)
                 self._spawn_popup(card, pid)
                 gs.play_card(pid, ci)
                 self._on_phase_change()
 
     def _exec_with_target(self, pid, card_idx, target_id):
         card = self.gs.players[pid].hand[card_idx]
-        self._score_human_play(pid, card, target_id)
         self._spawn_popup(card, pid, target_id)
         self.gs.play_card(pid, card_idx, target_id=target_id, target_card_idx=0)
         self._deselect()
         self._on_phase_change()
-
-    def _score_human_play(self, pid: int, card, target_id: int = -1):
-        """Rank the human's chosen play against the full EV-scored option list
-        and feed the result into player_skill.json, which drives how close
-        to optimal the Medium AI plays (see ai_agent.BangAI._action_scored).
-        """
-        if not self.ai:
-            return
-        gs      = self.gs
-        helper  = BangAI(pid)
-        counter = CardCounter(gs, pid)
-        ranked  = score_play_actions(gs, pid, counter, _default_w,
-                                      set(helper._known_enemies(gs)), helper._known_allies(gs))
-
-        ct = card.card_type
-        if ct == CardType.MISSED and gs.players[pid].is_calamity_janet():
-            ct = CardType.BANG
-        rank  = rank_of_action(ranked, ct, target_id)
-        state = player_skill.update_skill(player_skill.load_skill(), rank, len(ranked))
-        player_skill.save_skill(state)
 
     def _spawn_popup(self, card, actor_pid: int, target_pid: int = -1):
         """Flash a large copy of the card that was just played at screen center."""
@@ -676,16 +651,11 @@ class GameScreen:
 
     def _notify_ai_game_over(self):
         """Update Hard AI learning weights based on game outcome."""
-        from roles import Role
         gs = self.gs
         if gs.winner_role is None:
             return
         for pid, ai in self.ai.items():
-            p   = gs.players[pid]
-            won = (p.role == gs.winner_role or
-                   (p.role == Role.DEPUTY and gs.winner_role == Role.SHERIFF) or
-                   (p.role == Role.SHERIFF and gs.winner_role == Role.SHERIFF))
-            ai.record_game_result(won)
+            ai.record_game_result(gs.player_won(pid))
 
     def _deselect(self):
         self.selected_card_idx = -1

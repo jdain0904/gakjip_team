@@ -1,0 +1,151 @@
+"""Win-rate prediction model — logistic regression trained by gradient descent.
+
+    P(win | x) = sigma(w.x + b),     sigma(z) = 1 / (1 + e^-z)
+
+w and b are fit by minimizing binary cross-entropy loss
+
+    L = -(y*log(p) + (1-y)*log(1-p))
+
+via batch gradient descent (see fit()). Pure Python, no numpy: this
+module is imported by the live game (ai_agent.BangAI, Medium difficulty)
+so it must not pull in a numeric-computing dependency just to run
+inference. Training on a large self-play dataset is done offline by
+train_ai.py, where plain loops are still fast enough for this feature
+vector's size.
+"""
+from __future__ import annotations
+import json
+import math
+from pathlib import Path
+
+MODEL_FILE = Path(__file__).parent / "winrate_model.json"
+
+
+def _sigmoid(z: float) -> float:
+    if z >= 0:
+        return 1.0 / (1.0 + math.exp(-z))
+    ez = math.exp(z)
+    return ez / (1.0 + ez)
+
+
+class WinRateModel:
+    def __init__(self, n_features: int):
+        self.n_features = n_features
+        self.w: list[float] = [0.0] * n_features
+        self.b: float = 0.0
+        self.mean: list[float] = [0.0] * n_features
+        self.std: list[float] = [1.0] * n_features
+        self.history: dict[str, list[float]] = {
+            "loss": [], "accuracy": [], "val_loss": [], "val_accuracy": [],
+        }
+
+    # ── Inference ────────────────────────────────────────────────────────
+    def _normalize(self, x: list[float]) -> list[float]:
+        return [(xi - m) / s if s > 1e-9 else 0.0
+                for xi, m, s in zip(x, self.mean, self.std)]
+
+    def predict_proba(self, x: list[float]) -> float:
+        xn = self._normalize(x)
+        z  = self.b + sum(wi * xi for wi, xi in zip(self.w, xn))
+        return _sigmoid(z)
+
+    # ── Training ─────────────────────────────────────────────────────────
+    def fit(self, X: list[list[float]], y: list[int],
+            X_val: list[list[float]] | None = None, y_val: list[int] | None = None,
+            lr: float = 0.1, epochs: int = 300, l2: float = 1e-3,
+            verbose: bool = False):
+        """Batch gradient descent on the binary cross-entropy loss above."""
+        n = len(X)
+        if n == 0:
+            return
+
+        self.mean = [sum(row[j] for row in X) / n for j in range(self.n_features)]
+        self.std  = []
+        for j in range(self.n_features):
+            var = sum((row[j] - self.mean[j]) ** 2 for row in X) / n
+            self.std.append(math.sqrt(var) if var > 1e-9 else 1.0)
+
+        Xn = [self._normalize(row) for row in X]
+        Xn_val = [self._normalize(row) for row in X_val] if X_val else None
+
+        self.w = [0.0] * self.n_features
+        self.b = 0.0
+        self.history = {"loss": [], "accuracy": [], "val_loss": [], "val_accuracy": []}
+
+        for epoch in range(epochs):
+            grad_w = [0.0] * self.n_features
+            grad_b = 0.0
+            total_loss = 0.0
+            correct = 0
+            for xi, yi in zip(Xn, y):
+                z = self.b + sum(wj * xij for wj, xij in zip(self.w, xi))
+                p = _sigmoid(z)
+                pc = min(max(p, 1e-12), 1 - 1e-12)
+                total_loss += -(yi * math.log(pc) + (1 - yi) * math.log(1 - pc))
+                correct += 1 if (p >= 0.5) == (yi == 1) else 0
+                err = p - yi
+                for j in range(self.n_features):
+                    grad_w[j] += err * xi[j]
+                grad_b += err
+
+            for j in range(self.n_features):
+                self.w[j] -= lr * (grad_w[j] / n + l2 * self.w[j])
+            self.b -= lr * (grad_b / n)
+
+            self.history["loss"].append(total_loss / n)
+            self.history["accuracy"].append(correct / n)
+
+            if Xn_val:
+                vl, va = self._evaluate_normalized(Xn_val, y_val)
+                self.history["val_loss"].append(vl)
+                self.history["val_accuracy"].append(va)
+
+            if verbose and (epoch % max(1, epochs // 10) == 0 or epoch == epochs - 1):
+                msg = f"epoch {epoch:4d}  loss={self.history['loss'][-1]:.4f}  acc={self.history['accuracy'][-1]:.4f}"
+                if Xn_val:
+                    msg += f"  val_loss={self.history['val_loss'][-1]:.4f}  val_acc={self.history['val_accuracy'][-1]:.4f}"
+                print(msg)
+
+    def _evaluate_normalized(self, Xn: list[list[float]], y: list[int]) -> tuple[float, float]:
+        n = len(Xn)
+        if n == 0:
+            return 0.0, 0.0
+        total_loss = 0.0
+        correct = 0
+        for xi, yi in zip(Xn, y):
+            z = self.b + sum(wj * xij for wj, xij in zip(self.w, xi))
+            p = _sigmoid(z)
+            pc = min(max(p, 1e-12), 1 - 1e-12)
+            total_loss += -(yi * math.log(pc) + (1 - yi) * math.log(1 - pc))
+            correct += 1 if (p >= 0.5) == (yi == 1) else 0
+        return total_loss / n, correct / n
+
+    def evaluate(self, X: list[list[float]], y: list[int]) -> tuple[float, float]:
+        """Returns (BCE loss, accuracy) on a raw (unnormalized) dataset."""
+        return self._evaluate_normalized([self._normalize(row) for row in X], y)
+
+    # ── Persistence ──────────────────────────────────────────────────────
+    def save(self, feature_names: list[str], path: Path = MODEL_FILE):
+        data = {
+            "feature_names": feature_names,
+            "w": self.w, "b": self.b,
+            "mean": self.mean, "std": self.std,
+            "history": self.history,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    @classmethod
+    def load(cls, path: Path = MODEL_FILE) -> "WinRateModel | None":
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except Exception:
+            return None
+        model = cls(len(data["w"]))
+        model.w = data["w"]
+        model.b = data["b"]
+        model.mean = data["mean"]
+        model.std = data["std"]
+        model.history = data.get("history", {"loss": [], "accuracy": [], "val_loss": [], "val_accuracy": []})
+        return model

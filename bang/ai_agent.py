@@ -1,4 +1,15 @@
-"""Rule-based AI for Bang! — three difficulty levels with learning support."""
+"""Bang! AI — three difficulty tiers.
+
+쉬움(Easy)   — pure random play.
+보통(Medium) — dynamic difficulty adjustment. At every decision point,
+    asks winrate_model.WinRateModel for the human side's current
+    predicted win probability p and plays the EV-optimal action when
+    p >= 0.5 (human winning — raise the challenge), or eases off to
+    the next-best action when p < 0.5 (human losing — ease off).
+어려움(Hard) — always the EV-optimal action (rank 0), scored with
+    weights learned by reinforcement learning over self-play (see
+    record_game_result() and train_ai.py).
+"""
 from __future__ import annotations
 import random
 import json
@@ -8,10 +19,27 @@ from roles import Role
 from characters import CharacterType
 from game_state import GameState, Phase, RespType
 from ai_probability import CardCounter
-from ai_strategy import score_play_actions, score_gen_store_card, pick_by_strength
-import player_skill
+from ai_strategy import score_play_actions, score_gen_store_card
+from ai_features import state_vector
+from winrate_model import WinRateModel
 
 WEIGHTS_FILE = Path(__file__).parent / "ai_weights.json"
+
+_winrate_model: WinRateModel | None = None
+_winrate_model_loaded = False
+
+# Running baseline for the Hard AI's reward signal — see record_game_result().
+_baseline_winrate = 0.5
+
+
+def _get_winrate_model() -> WinRateModel | None:
+    """Lazy-loaded singleton — avoids re-reading winrate_model.json per AI instance."""
+    global _winrate_model, _winrate_model_loaded
+    if not _winrate_model_loaded:
+        _winrate_model = WinRateModel.load()
+        _winrate_model_loaded = True
+    return _winrate_model
+
 
 DEFAULT_WEIGHTS = {
     "shoot_kill":          10.0,
@@ -77,18 +105,75 @@ class BangAI:
     # ─────────────────────────────────────────────────────────────────────
     # Post-game learning (difficulty 2 only)
     # ─────────────────────────────────────────────────────────────────────
-    def record_game_result(self, won: bool):
-        """Call after game over to update Hard AI weights."""
+    def record_game_result(self, won: bool, persist: bool = True):
+        """Call after game over to update Hard AI weights.
+
+        This is the policy-improvement step of an every-visit Monte
+        Carlo control over the linear scoring function in
+        ai_strategy.score_play_actions: every feature tag this game's
+        policy actually fired (self._history) gets nudged toward the
+        actions that led to a win and away from the ones that led to
+        a loss. train_ai.py runs this at self-play scale and disables
+        `persist` so many self-play AI instances sharing one weights
+        dict don't clobber each other's update with redundant disk
+        writes — it saves once itself after applying every instance's
+        update for a game.
+
+        The reward is centered on a running win-rate baseline (a
+        REINFORCE-style variance-reduction baseline) instead of a raw
+        +1/-0.5 split. Without centering, a feature fired by winners
+        and losers alike would still drift in one fixed direction
+        purely because a multi-player game's per-seat win rate sits
+        well below 50% (most games have more losers than winners),
+        swamping any real signal about which actions are actually
+        good. Subtracting the baseline makes a feature's expected
+        update ~0 unless it's genuinely over- or under-represented
+        among winners.
+
+        Each update also shrinks the weight back toward its
+        DEFAULT_WEIGHTS value by a small `decay` fraction. Centering
+        alone zeroes the *expected* per-touch update for a neutral
+        feature, but over thousands of self-play games the remaining
+        zero-mean noise is still an unbounded random walk that, sooner
+        or later, drifts into the [0.5, 15.0] clamp and gets stuck —
+        every feature would eventually saturate regardless of whether
+        it actually matters, just on a long enough timeline. The decay
+        term gives the random walk a restoring force back to its
+        prior, so each weight settles at a stable equilibrium set by
+        how strongly that feature's reward signal actually outweighs
+        the pull of its default — proportional to lr/decay — rather
+        than continuing to wander as more self-play games are added.
+        """
+        global _baseline_winrate
         if self.difficulty != 2 or not self._history:
             return
-        lr     = 0.06
-        reward = 1.0 if won else -0.5
+        lr      = 0.02
+        decay   = 0.0015
+        outcome = 1.0 if won else 0.0
+        reward  = outcome - _baseline_winrate
         for feat in set(self._history):
             if feat in self._weights:
-                self._weights[feat] = max(0.5, min(15.0,
-                    self._weights[feat] + lr * reward))
-        _save_weights(self._weights)
+                default = DEFAULT_WEIGHTS.get(feat, 3.0)
+                current = self._weights[feat]
+                updated = current + lr * reward - decay * (current - default)
+                self._weights[feat] = max(0.5, min(15.0, updated))
+        _baseline_winrate += 0.01 * (outcome - _baseline_winrate)
+        if persist:
+            _save_weights(self._weights)
         self._history.clear()
+
+    def _predict_human_winrate(self, gs: GameState) -> float:
+        """DDA control signal: predicted win probability for the human side.
+
+        Falls back to a neutral 0.5 (no adjustment) if the win-rate
+        model hasn't been trained yet, or there's no human in this
+        game at all (e.g. train_ai.py self-play).
+        """
+        model  = _get_winrate_model()
+        humans = [i for i in gs._alive_ids() if i in gs.human_ids]
+        if model is None or not humans:
+            return 0.5
+        return sum(model.predict_proba(state_vector(gs, h)) for h in humans) / len(humans)
 
     def _hist(self, feat: str):
         if self.difficulty == 2:
@@ -124,9 +209,8 @@ class BangAI:
         if self.difficulty == 2:
             chosen = ranked[0]
         else:
-            skill    = player_skill.load_skill()["skill"]
-            strength = player_skill.strength_for_skill(skill)
-            chosen   = pick_by_strength(ranked, strength)
+            p_human = self._predict_human_winrate(gs)
+            chosen  = ranked[0] if p_human >= 0.5 else (ranked[1] if len(ranked) > 1 else ranked[0])
 
         self._hist(chosen.feat)
         return chosen.tuple
@@ -262,11 +346,9 @@ class BangAI:
         if self.difficulty == 2:
             return ("take_hit",) if conserve else ("bang", bangs[0])
 
-        skill    = player_skill.load_skill()["skill"]
-        strength = player_skill.strength_for_skill(skill)
-        if conserve and random.random() < strength:
-            return ("take_hit",)
-        return ("bang", bangs[0])
+        p_human  = self._predict_human_winrate(gs)
+        take_hit = conserve if p_human >= 0.5 else not conserve
+        return ("take_hit",) if take_hit else ("bang", bangs[0])
 
     def choose_gen_store(self, gs: GameState) -> int:
         pile = gs.gen_store_pile
@@ -285,9 +367,8 @@ class BangAI:
         if self.difficulty == 2:
             return order[0]
 
-        skill    = player_skill.load_skill()["skill"]
-        strength = player_skill.strength_for_skill(skill)
-        return pick_by_strength(order, strength)
+        p_human = self._predict_human_winrate(gs)
+        return order[0] if p_human >= 0.5 else (order[1] if len(order) > 1 else order[0])
 
     # ── Beer save ─────────────────────────────────────────────────────────
     def should_use_beer_save(self, gs: GameState) -> bool:

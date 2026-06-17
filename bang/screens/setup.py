@@ -149,8 +149,9 @@ class SetupScreen:
                 if di == self.ai_difficulty:
                     r = pygame.Rect(dbtn.rect)
                     pygame.draw.rect(s, (255, 220, 80), r, 3, border_radius=8)
-            diff_descs = ["AI가 무작위로 행동합니다", "균형 잡힌 전략으로 행동합니다",
-                          "최적 전략 + 경험으로 학습합니다"]
+            diff_descs = ["AI가 무작위로 행동합니다",
+                          "승률 예측 모델로 실시간 난이도를 조절합니다",
+                          "강화학습으로 학습한 가중치로 항상 최적의 수를 둡니다"]
             draw_text(s, diff_descs[self.ai_difficulty], "tiny", GOLD, cx, 338, "center")
             draw_text(s, "클릭으로 사람 / AI 전환  (P1은 항상 사람)", "small",
                       GRAY, cx, 358, "center")

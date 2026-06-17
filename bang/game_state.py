@@ -1055,6 +1055,13 @@ class GameState:
             return bool(self.valid_targets_for_card(pid, card))
         return True
 
+    def player_won(self, pid: int) -> bool:
+        """True if `pid`'s role ended up on the winning side (Deputy counts as a Sheriff win)."""
+        if self.winner_role is None:
+            return False
+        role = self.players[pid].role
+        return role == self.winner_role or (role == Role.DEPUTY and self.winner_role == Role.SHERIFF)
+
     def winner_message(self) -> str:
         if self.winner_role == Role.SHERIFF:
             return "보안관 & 부관 승리! 무법자와 배신자를 처치했습니다."

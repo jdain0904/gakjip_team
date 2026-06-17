@@ -4,11 +4,15 @@ Every legal action available to a player is scored from the same
 playbook, using `ai_probability.CardCounter` to turn "cards already
 played" + "cards I'm holding" into real odds. The two non-Easy
 difficulties only differ in *which* ranked action they ultimately
-commit to (see `pick_by_strength`):
+commit to:
 
-  - Hard always takes rank 0 (the highest-scoring action).
-  - Medium samples from the ranking with a strength in [0, 1] that
-    tracks the human player's own decision quality (see player_skill.py).
+  - Hard always takes rank 0 (the highest-scoring action), using
+    weights learned by reinforcement learning over self-play (see
+    ai_agent.BangAI.record_game_result and train_ai.py).
+  - Medium picks between rank 0 and rank 1 based on
+    winrate_model.WinRateModel's predicted win probability for the
+    human side (see ai_agent.BangAI._predict_human_winrate) — this is
+    the project's dynamic difficulty adjustment.
 
 Staying faithful to one's own role is treated as a hard constraint, not
 a scoring preference: single-target harmful cards (BANG!, Duel, Cat
@@ -254,29 +258,3 @@ def score_gen_store_card(c, player, counter, w) -> float:
     if ct in (CardType.INDIANS, CardType.GATLING, CardType.DUEL):
         return 3.0
     return 1.5
-
-
-# ─────────────────────────────────────────────────────────────────────────
-# Difficulty-shared selection helpers
-# ─────────────────────────────────────────────────────────────────────────
-def pick_by_strength(ranked: list, strength: float):
-    """Pick from `ranked` (best-first). `strength` in [0, 1]: 1.0 always takes
-    the top entry; lower values increasingly likely to settle for a weaker
-    one, modelling an imperfect (but never actively self-sabotaging) player.
-    """
-    if strength >= 0.999:
-        return ranked[0]
-    cur = max(0.05, min(0.95, strength))
-    for item in ranked:
-        if random.random() < cur:
-            return item
-        cur = min(0.95, cur + 0.18)
-    return ranked[-1]
-
-
-def rank_of_action(ranked: list[Action], card_type, target_id: int = -1) -> int:
-    """Index of the first action matching (card_type, target_id); last rank if absent."""
-    for i, a in enumerate(ranked):
-        if a.card_type == card_type and a.target_id == target_id:
-            return i
-    return len(ranked) - 1

@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
 
-# Runtime-persisted AI learning/skill state (regenerated on first run)
-bang/ai_weights.json
-bang/player_skill.json
+# bang/ai_weights.json and bang/winrate_model.json are trained-model
+# artifacts produced by train_ai.py and are committed intentionally so
+# the game ships with a trained Hard AI / win-rate model out of the box.
