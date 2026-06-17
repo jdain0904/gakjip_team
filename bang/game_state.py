@@ -125,7 +125,10 @@ class GameState:
         gs = cls(num_players=num_players, human_ids=human_ids, mode=mode)
         gs.players  = players
         gs.deck     = deck
-        gs.current_pid = 0
+        # Official rule: the Sheriff always takes the first turn. Roles are
+        # now assigned to a random seat, so find wherever Sheriff landed
+        # instead of assuming it's seat 0.
+        gs.current_pid = next(p.pid for p in players if p.role == Role.SHERIFF)
         gs._enter_turn_start()
         return gs
 
@@ -140,7 +143,7 @@ class GameState:
             self.deck = self.discard
             self.discard = [top]
             random.shuffle(self.deck)
-            self.log_msg("🔄 덱 소진 — 버림더미를 섞어 새 덱 생성")
+            self.log_msg("■ 덱 소진 — 버림더미를 섞어 새 덱 생성")
         return self.deck.pop() if self.deck else None
 
     def _flip(self, pid: int = -1) -> Optional[Card]:
@@ -155,7 +158,7 @@ class GameState:
             if c2 is not None:
                 chosen = self._lucky_duke_pick(c1, c2)
                 other  = c2 if chosen is c1 else c1
-                self.log_msg(f"🎲 럭키 듀크: {c1} | {c2} → {chosen} 선택")
+                self.log_msg(f"★ 럭키 듀크: {c1} | {c2} > {chosen} 선택")
                 # Put the unchosen in discard (already there via _flip_single)
                 return chosen
         return c1
@@ -268,7 +271,7 @@ class GameState:
         if exploded:
             p.remove_equipment(dyn)
             self.discard.append(dyn)
-            self.log_msg(f"💥 {p.name} 다이너마이트 폭발! -3HP")
+            self.log_msg(f"▲ {p.name} 다이너마이트 폭발! -3HP")
             died = p.take_damage(3)
             self._trigger_damage_reactions(self.current_pid, -1, 3)
             if died:
@@ -278,7 +281,7 @@ class GameState:
             p.remove_equipment(dyn)
             nxt = self._next_alive(self.current_pid)
             self.players[nxt].equip(dyn)
-            self.log_msg(f"🧨 다이너마이트 → {self.players[nxt].name}에게 전달")
+            self.log_msg(f"▶ 다이너마이트 > {self.players[nxt].name}에게 전달")
 
         if self.phase == Phase.GAME_OVER:
             return {"flipped": flipped, "exploded": exploded}
@@ -301,10 +304,10 @@ class GameState:
             p.remove_equipment(jail_c)
             self.discard.append(jail_c)
         if escaped:
-            self.log_msg(f"🔓 {p.name} 감옥 탈출!")
+            self.log_msg(f"○ {p.name} 감옥 탈출!")
             self._enter_draw_phase()
         else:
-            self.log_msg(f"🔒 {p.name} 감옥에서 턴 스킵")
+            self.log_msg(f"● {p.name} 감옥에서 턴 스킵")
             self._advance_turn()
         return {"flipped": flipped, "escaped": escaped}
 
@@ -316,7 +319,7 @@ class GameState:
             c = self._draw()
             if c:
                 self.kit_peek_cards.append(c)
-        self.log_msg(f"🔍 킷 칼슨: 상위 {len(self.kit_peek_cards)}장 공개")
+        self.log_msg(f"◇ 킷 칼슨: 상위 {len(self.kit_peek_cards)}장 공개")
         self.phase = Phase.KIT_PEEK
 
     def kit_carlson_pick(self, card_idx: int) -> bool:
@@ -363,7 +366,7 @@ class GameState:
         stolen = random.choice(target.hand)
         target.hand.remove(stolen)
         self.players[self.char_draw_pid].hand.append(stolen)
-        self.log_msg(f"🤠 제시 존스: {target.name}에게서 [{stolen.name}] 가져옴")
+        self.log_msg(f"★ 제시 존스: {target.name}에게서 [{stolen.name}] 가져옴")
         self.char_draw_first_done = True
         self._finish_char_draw()
         return True
@@ -378,7 +381,7 @@ class GameState:
             return self.char_draw_from_deck()
         c = self.discard.pop()
         self.players[self.char_draw_pid].hand.append(c)
-        self.log_msg(f"🤠 페드로 라미레즈: 버림더미에서 [{c.name}] 가져옴")
+        self.log_msg(f"★ 페드로 라미레즈: 버림더미에서 [{c.name}] 가져옴")
         self.char_draw_first_done = True
         self._finish_char_draw()
         return True
@@ -407,7 +410,7 @@ class GameState:
             if c2:
                 p.hand.append(c2)
                 is_red = c2.suit in (Suit.HEARTS, Suit.DIAMONDS)
-                self.log_msg(f"🃏 블랙 잭: 2번째 카드 {c2} {'→ 빨간 무늬! +1장 추가' if is_red else ''}")
+                self.log_msg(f"★ 블랙 잭: 2번째 카드 {c2} {'> 빨간 무늬! +1장 추가' if is_red else ''}")
                 if is_red:
                     c3 = self._draw()
                     if c3:
@@ -417,7 +420,7 @@ class GameState:
                 c = self._draw()
                 if c:
                     p.hand.append(c)
-            self.log_msg(f"📥 {p.name} 카드 2장 드로우")
+            self.log_msg(f"■ {p.name} 카드 2장 드로우")
 
         self.bang_used = False
         self.phase = Phase.PLAY
@@ -483,7 +486,7 @@ class GameState:
         if not p.has_volcanic():
             self.bang_used = True
         label = "Missed!(뱅)" if as_missed else "BANG!"
-        self.log_msg(f"🔫 {p.name} → {self.players[target_id].name} {label}")
+        self.log_msg(f"▲ {p.name} > {self.players[target_id].name} {label}")
         self._start_bang_response(pid, target_id)
         return True
 
@@ -495,7 +498,7 @@ class GameState:
             return False
         self._discard_from_hand(pid, card_idx)
         p.heal(1)
-        self.log_msg(f"🍺 {p.name} HP +1 ({p.hp}/{p.max_hp})")
+        self.log_msg(f"♥ {p.name} HP +1 ({p.hp}/{p.max_hp})")
         return True
 
     def _play_draw_cards(self, pid: int, card_idx: int, n: int, label: str) -> bool:
@@ -505,7 +508,7 @@ class GameState:
             c = self._draw()
             if c:
                 p.hand.append(c)
-        self.log_msg(f"📦 {p.name} {label} → +{n}장")
+        self.log_msg(f"◆ {p.name} {label} > +{n}장")
         return True
 
     def _play_cat_balou(self, pid, card_idx, target_id, target_card_idx) -> bool:
@@ -521,7 +524,7 @@ class GameState:
         self._discard_from_hand(pid, card_idx)
         self._remove_card_from_player(target, chosen)
         self.discard.append(chosen)
-        self.log_msg(f"🃏 캣 발루: {self.players[pid].name} → {target.name} [{chosen.name}] 버림")
+        self.log_msg(f"◆ 캣 발루: {self.players[pid].name} > {target.name} [{chosen.name}] 버림")
         return True
 
     def _play_panic(self, pid, card_idx, target_id, target_card_idx) -> bool:
@@ -539,7 +542,7 @@ class GameState:
         self._discard_from_hand(pid, card_idx)
         self._remove_card_from_player(target, chosen)
         self.players[pid].hand.append(chosen)
-        self.log_msg(f"😱 패닉: {self.players[pid].name} → {target.name} [{chosen.name}] 훔침")
+        self.log_msg(f"◆ 패닉: {self.players[pid].name} > {target.name} [{chosen.name}] 훔침")
         return True
 
     def _remove_card_from_player(self, player: Player, card: Card):
@@ -553,14 +556,14 @@ class GameState:
 
     def _play_indians(self, pid, card_idx) -> bool:
         self._discard_from_hand(pid, card_idx)
-        self.log_msg(f"🪃 인디언: {self.players[pid].name} → 전원 BANG! 필요")
+        self.log_msg(f"▲ 인디언: {self.players[pid].name} > 전원 BANG! 필요")
         targets = [i for i in self._alive_ids() if i != pid]
         self._start_group_response(RespType.INDIANS, pid, targets)
         return True
 
     def _play_gatling(self, pid, card_idx) -> bool:
         self._discard_from_hand(pid, card_idx)
-        self.log_msg(f"🔫🔫 개틀링: {self.players[pid].name} → 전원 Missed! 필요")
+        self.log_msg(f"▲▲ 개틀링: {self.players[pid].name} > 전원 Missed! 필요")
         targets = [i for i in self._alive_ids() if i != pid]
         self._start_group_response(RespType.GATLING, pid, targets)
         return True
@@ -570,7 +573,7 @@ class GameState:
         for p in self.players:
             if p.alive:
                 p.heal(1)
-        self.log_msg("🥃 살롱: 전원 HP +1")
+        self.log_msg("♥ 살롱: 전원 HP +1")
         return True
 
     def _play_gen_store(self, pid, card_idx) -> bool:
@@ -583,7 +586,7 @@ class GameState:
                 self.gen_store_pile.append(c)
         ci = alive.index(pid)
         self.gen_store_order = alive[ci:] + alive[:ci]
-        self.log_msg(f"🏪 잡화점: {len(self.gen_store_pile)}장 공개")
+        self.log_msg(f"◇ 잡화점: {len(self.gen_store_pile)}장 공개")
         self.phase = Phase.GEN_STORE
         return True
 
@@ -597,7 +600,7 @@ class GameState:
         card = self.gen_store_pile.pop(card_idx)
         self.players[pid].hand.append(card)
         self.gen_store_order.pop(0)
-        self.log_msg(f"  {self.players[pid].name} → [{card.name}] 선택")
+        self.log_msg(f"  {self.players[pid].name} > [{card.name}] 선택")
         if not self.gen_store_order:
             self.discard.extend(self.gen_store_pile)
             self.gen_store_pile = []
@@ -611,7 +614,7 @@ class GameState:
         self.duel_challenger = pid
         self.duel_other      = target_id
         self.duel_current    = target_id
-        self.log_msg(f"⚔️ 결투: {self.players[pid].name} vs {self.players[target_id].name}")
+        self.log_msg(f"▲ 결투: {self.players[pid].name} vs {self.players[target_id].name}")
         self.phase = Phase.DUEL
         return True
 
@@ -626,11 +629,11 @@ class GameState:
             target.equip(card)
             target.jailed    = True
             target.jail_card = card
-            self.log_msg(f"🔒 감옥: {p.name} → {target.name}")
+            self.log_msg(f"● 감옥: {p.name} > {target.name}")
             return True
         p.hand.pop(card_idx)
         p.equip(card)
-        self.log_msg(f"🔧 {p.name} [{card.name}] 장착")
+        self.log_msg(f"● {p.name} [{card.name}] 장착")
         return True
 
     # ── Sid Ketchum active ability ─────────────────────────────────────────
@@ -651,7 +654,7 @@ class GameState:
         p.hand.pop(lo)
         self.discard.extend(p.hand[lo:lo])  # already popped
         p.heal(1)
-        self.log_msg(f"💊 {p.name} 시드 케첨 능력: +1HP ({p.hp}/{p.max_hp})")
+        self.log_msg(f"♥ {p.name} 시드 케첨 능력: +1HP ({p.hp}/{p.max_hp})")
         self._check_suzy_lafayette(pid)
         return True
 
@@ -704,9 +707,9 @@ class GameState:
         self.barrel_saved = saved
         if saved:
             self.needs_missed = False
-            self.log_msg(f"🛢️ {p.name} 나무통 발동! ({flipped}) → 회피")
+            self.log_msg(f"○ {p.name} 나무통 발동! ({flipped}) > BANG! 회피")
         else:
-            self.log_msg(f"🛢️ {p.name} 나무통 실패 ({flipped})")
+            self.log_msg(f"▼ {p.name} 나무통 실패 ({flipped}, 하트 아님) > 직접 막아야 함")
         return saved
 
     def respond_with_missed(self, card_idx: int) -> bool:
@@ -731,7 +734,7 @@ class GameState:
         self.discard.append(card)
         self._check_suzy_lafayette(pid)
         self.resp_misses_played += 1
-        self.log_msg(f"✋ {p.name} [{card.name}] 사용 ({self.resp_misses_played}/{self.resp_misses_needed})")
+        self.log_msg(f"○ {p.name} [{card.name}] 사용 ({self.resp_misses_played}/{self.resp_misses_needed})")
 
         if self.resp_misses_played >= self.resp_misses_needed:
             self._finish_response(hit=False)
@@ -741,7 +744,7 @@ class GameState:
     def respond_take_hit(self):
         pid = self.resp_current
         p   = self.players[pid]
-        self.log_msg(f"💥 {p.name} 피격! -1HP")
+        self.log_msg(f"▲ {p.name} 피격! -1HP")
         died = p.take_damage(1)
         self._trigger_damage_reactions(pid, self.resp_attacker, 1)
         if died:
@@ -774,7 +777,7 @@ class GameState:
         p.hand.pop(card_idx)
         self.discard.append(card)
         self._check_suzy_lafayette(pid)
-        self.log_msg(f"⚔️ {p.name} [{card.name}] →")
+        self.log_msg(f"▲ {p.name} [{card.name}] >")
         self.duel_current = (self.duel_challenger
                              if self.duel_current == self.duel_other
                              else self.duel_other)
@@ -784,7 +787,7 @@ class GameState:
         pid  = self.duel_current
         p    = self.players[pid]
         killer = self.duel_challenger if pid == self.duel_other else self.duel_other
-        self.log_msg(f"⚔️ {p.name} 결투 패배! -1HP")
+        self.log_msg(f"▲ {p.name} 결투 패배! -1HP")
         died = p.take_damage(1)
         self._trigger_damage_reactions(pid, killer, 1)
         self.duel_challenger = self.duel_other = self.duel_current = -1
@@ -821,7 +824,7 @@ class GameState:
         beer = p.hand.pop(beer_idx)
         self.discard.append(beer)
         p.hp = 1
-        self.log_msg(f"🍺 {p.name} 맥주로 생존! HP 1/{p.max_hp}")
+        self.log_msg(f"♥ {p.name} 맥주로 생존! HP 1/{p.max_hp}")
         self._check_suzy_lafayette(pid)
         resume = self.beer_save_resume
         self.beer_save_pid    = -1
@@ -871,7 +874,7 @@ class GameState:
                 c = self._draw()
                 if c:
                     p.hand.append(c)
-            self.log_msg(f"🤠 바트 카시디: +{amount}장 드로우")
+            self.log_msg(f"★ 바트 카시디: +{amount}장 드로우")
 
         # El Gringo: steal 1 card per HP lost from attacker
         if ct == CharacterType.EL_GRINGO and p.alive and attacker_id >= 0:
@@ -883,7 +886,7 @@ class GameState:
                     stolen = random.choice(attacker.hand)
                     attacker.hand.remove(stolen)
                     p.hand.append(stolen)
-                self.log_msg(f"🤠 엘 그링고: {attacker.name}에게서 {amount}장 훔침")
+                self.log_msg(f"★ 엘 그링고: {attacker.name}에게서 {amount}장 훔침")
 
     def _check_suzy_lafayette(self, pid: int):
         p = self.players[pid]
@@ -891,7 +894,7 @@ class GameState:
             c = self._draw()
             if c:
                 p.hand.append(c)
-                self.log_msg(f"🤠 수지 라파예트: 손패 없음 → 카드 1장 드로우 [{c.name}]")
+                self.log_msg(f"★ 수지 라파예트: 손패 없음 > 카드 1장 드로우 [{c.name}]")
 
     # ═════════════════════════════════════════════════════════════════════
     # Elimination & win
@@ -900,7 +903,7 @@ class GameState:
         p       = self.players[pid]
         p.alive = False
         p.role_revealed = True
-        self.log_msg(f"💀 {p.name} 탈락! 역할: {p.role.value}")
+        self.log_msg(f"▼ {p.name} 탈락! 역할: {p.role.value}")
 
         # Vulture Sam: gets ALL cards from eliminated player
         vulture = next((pl for pl in self.players
@@ -909,7 +912,7 @@ class GameState:
         if vulture:
             vulture.hand.extend(p.hand)
             vulture.hand.extend(p.equipment)
-            self.log_msg(f"🦅 벌처 샘: {p.name}의 카드 전부 획득")
+            self.log_msg(f"★ 벌처 샘: {p.name}의 카드 전부 획득")
         else:
             # Outlaw kill bonus for the killer
             if p.role == Role.OUTLAW and killer_id >= 0 and self.players[killer_id].alive:
@@ -917,7 +920,7 @@ class GameState:
                     c = self._draw()
                     if c:
                         self.players[killer_id].hand.append(c)
-                self.log_msg(f"🎁 {self.players[killer_id].name} 무법자 처치 보너스 +3장")
+                self.log_msg(f"◆ {self.players[killer_id].name} 무법자 처치 보너스 +3장")
             self.discard.extend(p.hand)
             self.discard.extend(p.equipment)
 
@@ -926,7 +929,7 @@ class GameState:
             if self.players[killer_id].role == Role.SHERIFF:
                 self.players[killer_id].hand.clear()
                 self.players[killer_id].equipment.clear()
-                self.log_msg("⚠️ 보안관이 부관을 처치 → 패 전부 버림!")
+                self.log_msg("▲ 보안관이 부관을 처치 > 패 전부 버림!")
 
         p.hand.clear()
         p.equipment.clear()

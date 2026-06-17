@@ -76,7 +76,7 @@ class PlayedCardPopup:
         cx = content.get_width() // 2
         sub = f"{self.actor_name} 사용"
         if self.target_name:
-            sub += f"  →  {self.target_name}"
+            sub += f"  >  {self.target_name}"
         draw_text(content, self.card.name, "large", GOLD, cx, ch + 16, "center")
         draw_text(content, sub, "small", WHITE, cx, ch + 40, "center")
 
@@ -135,7 +135,7 @@ class GameScreen:
                                 pygame.Rect(0, 0, self.TIP_CARD_W, self.TIP_CARD_H))
             self._char_card_surfs[pid] = surf
 
-        self.btn_menu    = Button((WIN_W - 118, 8, 108, 34), "← 메뉴", DIM, radius=7)
+        self.btn_menu    = Button((WIN_W - 118, 8, 108, 34), "< 메뉴", DIM, radius=7)
         self.btn_endturn = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
                                   "턴 종료", ACCENT, radius=9, fkey="normal")
         self.btn_takeit  = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
@@ -422,7 +422,6 @@ class GameScreen:
             return
 
         cx = WIN_W // 2
-        panel_h = 260
         cy = WIN_H // 2
 
         if self.btn_from_deck.clicked(event, pos):
@@ -438,6 +437,9 @@ class GameScreen:
         if gs.char_draw_type == "jesse":
             alive = gs._alive_ids()
             targets = [i for i in alive if i != pid and gs.players[i].hand]
+            # Must match the dynamic panel_h in _draw_char_draw_overlay(),
+            # or button hit-boxes drift out of sync with where they're drawn.
+            panel_h = max(260, 76 + len(targets) * 42 + 56)
             panel_y = cy - panel_h // 2
             btn_y = panel_y + 76
             for ti in targets:
@@ -774,12 +776,34 @@ class GameScreen:
             pygame.draw.rect(s, DIM, rect, 2, border_radius=8)
         draw_text(s, f"버림 {n_disc}장", "tiny", GOLD, disc_x + dw // 2, y + dh + 8, "center")
 
+    def _human_viewer_pid(self) -> int:
+        """The human player whose perspective the table should be drawn from
+        right now (-1 if it's nobody's human turn, e.g. pure AI spectating).
+
+        Same phase-based resolution _draw_hand_area uses to decide whose
+        hand to reveal — factored out so other drawing (e.g. per-opponent
+        distance) can use the same "whose point of view is this" notion.
+        """
+        gs = self.gs
+        if gs.phase == Phase.RESPONSE:
+            show_pid = gs.resp_current
+        elif gs.phase == Phase.DUEL:
+            show_pid = gs.duel_current
+        elif gs.phase == Phase.BEER_SAVE:
+            show_pid = gs.beer_save_pid
+        else:
+            show_pid = gs.current_pid
+        if show_pid < 0 or not gs.players[show_pid].alive or show_pid not in gs.human_ids:
+            return -1
+        return show_pid
+
     def _draw_players(self):
         s   = self.screen
         gs  = self.gs
         pos = pygame.mouse.get_pos()
         pulse = (math.sin(self._anim_clock / 260.0) + 1) / 2   # 0..1 breathing glow
         self._hover_pid = None
+        viewer_pid = self._human_viewer_pid()
 
         for pid, (px, py) in self._player_positions.items():
             p   = gs.players[pid]
@@ -833,7 +857,11 @@ class GameScreen:
             # Nameplate panel (sized to fit the text it holds)
             role_lbl = p.role.value if p.role_revealed else "?"
             char_lbl = CHARACTERS[p.character].name_ko if p.character else None
-            lines    = [p.name, role_lbl] + ([char_lbl] if char_lbl else [])
+            dist     = gs.distance(viewer_pid, pid) if (p.alive and pid != viewer_pid
+                                                         and viewer_pid >= 0) else None
+            dist_lbl = f"거리 {dist}" if dist is not None else None
+            lines    = ([p.name, role_lbl] + ([char_lbl] if char_lbl else [])
+                        + ([dist_lbl] if dist_lbl else []))
             fnt      = font("tiny")
             plate_w  = max(fnt.size(t)[0] for t in lines) + 18
             plate_h  = 14 * len(lines) + 10
@@ -849,6 +877,11 @@ class GameScreen:
             if char_lbl:
                 ly += 14
                 draw_text(s, char_lbl, "tiny", (190, 165, 100), px, ly, "center")
+            if dist_lbl:
+                ly += 14
+                in_range = dist <= gs.players[viewer_pid].gun_range()
+                dist_col = (110, 200, 110) if in_range else (205, 110, 100)
+                draw_text(s, dist_lbl, "tiny", dist_col, px, ly, "center")
 
             self._draw_hp(s, px, py - R - 22, p)
 
@@ -1051,20 +1084,8 @@ class GameScreen:
                         Phase.GEN_STORE):
             return
 
-        if gs.phase in (Phase.RESPONSE,):
-            show_pid = gs.resp_current
-        elif gs.phase == Phase.DUEL:
-            show_pid = gs.duel_current
-        elif gs.phase == Phase.BEER_SAVE:
-            show_pid = gs.beer_save_pid
-        else:
-            show_pid = gs.current_pid
-
-        if show_pid < 0 or not gs.players[show_pid].alive:
-            return
-
-        # Don't reveal AI players' cards to humans
-        if show_pid not in gs.human_ids:
+        show_pid = self._human_viewer_pid()
+        if show_pid < 0:
             return
 
         p  = gs.players[show_pid]
@@ -1079,7 +1100,7 @@ class GameScreen:
         char_lbl = f" [{CHARACTERS[p.character].name_ko}]" if p.character else ""
         labels = {
             Phase.DRAW:      f"{p.name}{char_lbl} — 클릭하여 드로우",
-            Phase.PLAY:      f"{p.name}{char_lbl} — 손패 ({len(p.hand)}장)  HP {p.hp}/{p.max_hp}",
+            Phase.PLAY:      f"{p.name}{char_lbl} — 손패 ({len(p.hand)}장)  HP {p.hp}/{p.max_hp}  사거리 {p.gun_range()}",
             Phase.RESPONSE:  f"{p.name} — {'BANG!' if gs.resp_type == RespType.INDIANS else 'Missed!'} 로 반응 또는 맞기",
             Phase.DUEL:      f"{p.name} — 결투: BANG! 내거나 맞기",
             Phase.DISCARD:   f"{p.name} — 버릴 카드 선택 ({len(p.hand) - p.hand_limit()}장 더)",
@@ -1202,7 +1223,15 @@ class GameScreen:
         char = CHARACTERS.get(p.character)
         char_name = char.name_ko if char else p.name
 
-        panel_w, panel_h = 560, 260
+        # Jesse Jones lists one row per eligible target — in 5+ player games
+        # this can exceed the space a fixed panel height assumed, so grow the
+        # panel (and the bottom deck-button row, anchored to panel.bottom)
+        # to fit instead of overlapping the last row.
+        alive = gs._alive_ids()
+        targets = ([i for i in alive if i != pid and gs.players[i].hand]
+                   if gs.char_draw_type == "jesse" else [])
+        panel_w = 560
+        panel_h = max(260, 76 + len(targets) * 42 + 56)
         panel = pygame.Rect(cx - panel_w // 2, cy - panel_h // 2, panel_w, panel_h)
         rounded_rect(s, PANEL_BG, panel, 14)
         pygame.draw.rect(s, GOLD, panel, 2, border_radius=14)
@@ -1214,8 +1243,6 @@ class GameScreen:
             draw_text(s, "다른 플레이어 손패에서 가져오거나, 덱에서 뽑기", "small", GRAY,
                       cx, panel.y + 46, "center")
             # List valid targets as buttons
-            alive = gs._alive_ids()
-            targets = [i for i in alive if i != pid and gs.players[i].hand]
             btn_y = panel.y + 76
             mouse = pygame.mouse.get_pos()
             for ti in targets:
@@ -1292,18 +1319,23 @@ class GameScreen:
         ov = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
         ov.fill((0, 0, 0, 190))
         s.blit(ov, (0, 0))
-        rounded_rect(s, PANEL_BG, pygame.Rect(cx - 300, cy - 110, 600, 220), 18)
-        pygame.draw.rect(s, GOLD, pygame.Rect(cx - 300, cy - 110, 600, 220), 2, border_radius=18)
-        draw_text(s, "게임 종료!", "large", GOLD, cx, cy - 90, "center")
-        draw_text(s, self.gs.winner_message(), "normal", WHITE, cx, cy - 38, "center")
         # Reveal all roles
         alive_roles = [(p.name, p.role.value, p.character)
                        for p in self.gs.players]
+        # Role list grows with player count (4-7) — panel must grow to match,
+        # or the last row collides with the instruction line anchored below it.
+        panel_h = 220 + max(0, len(alive_roles) - 4) * 20
+        panel = pygame.Rect(cx - 300, cy - panel_h // 2, 600, panel_h)
+        rounded_rect(s, PANEL_BG, panel, 18)
+        pygame.draw.rect(s, GOLD, panel, 2, border_radius=18)
+        draw_text(s, "게임 종료!", "large", GOLD, cx, panel.y + 20, "center")
+        draw_text(s, self.gs.winner_message(), "normal", WHITE, cx, panel.y + 72, "center")
         for i, (name, role, char) in enumerate(alive_roles):
             char_lbl = f" [{CHARACTERS[char].name_ko}]" if char else ""
             draw_text(s, f"{name}: {role}{char_lbl}", "small", GRAY,
-                      cx, cy + 10 + i * 20, "center")
-        draw_text(s, "[← 메뉴] 버튼으로 돌아가세요", "small", GRAY, cx, cy + 90, "center")
+                      cx, panel.y + 120 + i * 20, "center")
+        draw_text(s, "[< 메뉴] 버튼으로 돌아가세요", "small", GRAY,
+                  cx, panel.bottom - 20, "center")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

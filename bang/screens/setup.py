@@ -38,11 +38,11 @@ class SetupScreen:
 
     def _build_buttons(self):
         cx = WIN_W // 2
-        self.btn_minus = Button((cx - 100, 188, 42, 42), "−", DIM, radius=8)
+        self.btn_minus = Button((cx - 100, 188, 42, 42), "-", DIM, radius=8)
         self.btn_plus  = Button((cx +  58, 188, 42, 42), "+", DIM, radius=8)
         self.btn_start = Button((cx - 120, WIN_H - 90, 240, 54), "게임 시작!", GREEN,
                                 radius=12, fkey="sub")
-        self.btn_back  = Button((30, WIN_H - 90, 100, 40), "← 뒤로", DIM, radius=8)
+        self.btn_back  = Button((30, WIN_H - 90, 100, 40), "< 뒤로", DIM, radius=8)
         # Difficulty buttons (AI mode only)
         self.diff_btns: list[Button] = []
         if self.mode == "ai":
@@ -60,7 +60,7 @@ class SetupScreen:
         self.toggles: list[tuple[int, Button]] = []
         span = self.n * 125
         sx   = WIN_W // 2 - span // 2
-        ty   = 350 if self.mode == "ai" else 330
+        ty   = 386 if self.mode == "ai" else 330
         for i in range(self.n):
             if self.mode == "local":
                 label = f"P{i+1}  사람"
@@ -152,9 +152,9 @@ class SetupScreen:
             diff_descs = ["AI가 무작위로 행동합니다",
                           "승률 예측 모델로 실시간 난이도를 조절합니다",
                           "강화학습으로 학습한 가중치로 항상 최적의 수를 둡니다"]
-            draw_text(s, diff_descs[self.ai_difficulty], "tiny", GOLD, cx, 338, "center")
+            draw_text(s, diff_descs[self.ai_difficulty], "tiny", GOLD, cx, 344, "center")
             draw_text(s, "클릭으로 사람 / AI 전환  (P1은 항상 사람)", "small",
-                      GRAY, cx, 358, "center")
+                      GRAY, cx, 368, "center")
         else:
             draw_text(s, "로컬 플레이: 모든 플레이어 같은 화면 사용", "small",
                       GRAY, cx, 304, "center")
@@ -163,14 +163,14 @@ class SetupScreen:
             btn.draw(s, btn.is_hovered(pos))
 
         # Rules summary
-        ry = 418
+        ry = 442
         rounded_rect(s, PANEL_BG, pygame.Rect(cx - 340, ry, 680, 200), 12)
         rules = [
             ("목표",   "역할에 따라 다른 승리 조건 달성"),
-            ("보안관", "무법자·배신자 전원 제거 → 보안관+부관 승리"),
+            ("보안관", "무법자·배신자 전원 제거 > 보안관+부관 승리"),
             ("무법자", "보안관을 처치하면 무법자 승리"),
             ("배신자", "마지막 1명으로 살아남으면 배신자 승리"),
-            ("턴 순서","드로우 2장 → 카드 플레이 → HP만큼 버리기"),
+            ("턴 순서","드로우 2장 > 카드 플레이 > HP만큼 버리기"),
         ]
         for i, (k, v) in enumerate(rules):
             draw_text(s, k, "small", GOLD,  cx - 330, ry + 14 + i * 34)

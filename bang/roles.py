@@ -20,9 +20,6 @@ _ROLE_SETS = {
 def assign_roles(n: int) -> list[Role]:
     pool = _ROLE_SETS[n][:]
     random.shuffle(pool)
-    # Sheriff always at index 0
-    si = pool.index(Role.SHERIFF)
-    pool[0], pool[si] = pool[si], pool[0]
     return pool
 
 

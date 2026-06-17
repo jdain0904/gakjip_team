@@ -23,13 +23,33 @@ from ai_strategy import score_play_actions, score_gen_store_card
 from ai_features import state_vector
 from winrate_model import WinRateModel
 
-WEIGHTS_FILE = Path(__file__).parent / "ai_weights.json"
+WEIGHTS_FILE  = Path(__file__).parent / "ai_weights.json"
+BASELINE_FILE = Path(__file__).parent / "ai_baseline.json"
 
 _winrate_model: WinRateModel | None = None
 _winrate_model_loaded = False
 
+
+def _load_baseline() -> float:
+    try:
+        with open(BASELINE_FILE) as f:
+            return float(json.load(f)["baseline_winrate"])
+    except Exception:
+        return 0.5
+
+
+def _save_baseline(v: float):
+    try:
+        with open(BASELINE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"baseline_winrate": v}, f)
+    except Exception:
+        pass
+
+
 # Running baseline for the Hard AI's reward signal — see record_game_result().
-_baseline_winrate = 0.5
+# Persisted across interactive sessions (not self-play, which always starts
+# fresh) so the EMA doesn't reset to 0.5 every time the game is relaunched.
+_baseline_winrate = _load_baseline()
 
 
 def _get_winrate_model() -> WinRateModel | None:
@@ -160,6 +180,7 @@ class BangAI:
         _baseline_winrate += 0.01 * (outcome - _baseline_winrate)
         if persist:
             _save_weights(self._weights)
+            _save_baseline(_baseline_winrate)
         self._history.clear()
 
     def _predict_human_winrate(self, gs: GameState) -> float:

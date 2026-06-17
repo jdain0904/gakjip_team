@@ -1,27 +1,46 @@
 """Shared UI helpers for all screens."""
 import math
+import os
 import pygame
 from constants import WHITE, GRAY, DIM
 
 
 _fonts: dict[str, pygame.font.Font] = {}
 
+# Bundled Korean font (NAVER Nanum Gothic, SIL OFL 1.1 — see LICENSE file
+# alongside it). Loading this directly guarantees correct Hangul rendering
+# on every machine the game ships to, regardless of which system fonts (if
+# any) happen to be installed — the previous approach relied on guessing an
+# installed font name, which silently produced tofu/blank glyphs on systems
+# without one of those specific fonts.
+_BUNDLED_FONT = os.path.join(os.path.dirname(__file__), "assets", "fonts", "NanumGothic.ttf")
 
-def init_fonts():
-    # pygame.font.SysFont() never fails — for an unknown name it silently
-    # substitutes a Latin-only default, so picking the first candidate that
-    # "works" picked the wrong font on systems without the Windows/Mac
-    # Korean font names. match_font() actually resolves a name to an
-    # installed font file (or None), so use that to find a real match.
+
+def _find_fallback_font_path() -> str | None:
+    """Only used if the bundled font file is somehow missing.
+
+    pygame.font.SysFont() never fails — for an unknown name it silently
+    substitutes a Latin-only default — so this resolves each candidate
+    through match_font() (which returns a real file path or None) and loads
+    that exact file directly, rather than asking SysFont to re-resolve the
+    name itself through a possibly different matching path.
+    """
     candidates = ["malgungothic", "malgun gothic", "applegothic", "nanumgothic",
                   "gulim", "dotum", "notosanskr", "notosanscjkkr",
                   "wenquanyizenhei", "unifont", "dejavusans", "arial"]
+    for name in candidates:
+        path = pygame.font.match_font(name)
+        if path:
+            return path
+    return None
+
+
+def init_fonts():
     sizes = {"title": 44, "large": 32, "sub": 22,
              "normal": 18, "small": 15, "tiny": 12}
-    chosen = next((n for n in candidates if pygame.font.match_font(n)), None)
+    path = _BUNDLED_FONT if os.path.exists(_BUNDLED_FONT) else _find_fallback_font_path()
     for key, sz in sizes.items():
-        _fonts[key] = (pygame.font.SysFont(chosen, sz) if chosen
-                       else pygame.font.Font(None, sz + 4))
+        _fonts[key] = pygame.font.Font(path, sz) if path else pygame.font.Font(None, sz + 4)
 
 
 def font(key: str) -> pygame.font.Font:

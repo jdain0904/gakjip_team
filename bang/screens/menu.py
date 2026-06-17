@@ -14,9 +14,6 @@ class MenuScreen:
                                 GREEN, radius=12, fkey="sub")
         self.btn_ai    = Button((cx - 140, 420, 280, 60), "AI 대전",
                                 ACCENT, radius=12, fkey="sub")
-        self.btn_multi = Button((cx - 140, 500, 280, 60), "멀티플레이 (준비 중)",
-                                (55, 55, 65), radius=12, fkey="sub")
-        self.btn_multi.enabled = False
 
         self._stars = _make_stars(120)
 
@@ -50,7 +47,6 @@ class MenuScreen:
         pos = pygame.mouse.get_pos()
         self.btn_local.draw(s, self.btn_local.is_hovered(pos))
         self.btn_ai.draw(s, self.btn_ai.is_hovered(pos))
-        self.btn_multi.draw(s, False)
 
         # Mode descriptions
         draw_text(s, "같은 화면에서 여러 명이 함께 플레이", "tiny", GRAY,

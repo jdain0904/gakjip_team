@@ -497,9 +497,9 @@ def _draw_char_icon(surf, char: CharacterType, cx, cy, r):
             pygame.draw.rect(surf, PARCHMENT_LGT, cr, border_radius=2)
             pygame.draw.rect(surf, dark, cr, 1, border_radius=2)
     elif char == CharacterType.WILLY_KID:
-        # BANG! × ∞
+        # BANG! × N (unlimited)
         draw_text_tiny(surf, "BANG!", dark, cx - 10, cy - 10)
-        draw_text_tiny(surf, "× ∞", dark, cx + 2, cy + 2)
+        draw_text_tiny(surf, "× N", dark, cx + 2, cy + 2)
     else:
         # Generic gun icon
         pygame.draw.rect(surf, dark, (cx - 22, cy - 6, 30, 10), border_radius=3)
@@ -819,18 +819,24 @@ def draw_game_card(surf: pygame.Surface, card: Card,
     draw_suit_icon(surf, card.suit.value, x + 8, y + 6, 10, sv_color)
     draw_text(surf, val_str, "tiny", sv_color, x + 4, y + 14)
 
-    # Title (upper portion)
+    # Title (upper portion) — measure actual rendered width rather than
+    # guessing from character count, so short-but-long-counted names like
+    # "Missed!" stay on one line instead of being split mid-word.
     name = card.name
     title_y = y + h // 5
-    if len(name) > 6:
-        # two lines
+    from ui_utils import font as get_font
+    if get_font("small").size(name)[0] <= w - 8:
+        draw_text(surf, name, "small", text_color, x + w // 2, title_y, "center")
+    else:
+        # Two lines: break on a space near the middle if one exists,
+        # otherwise fall back to a character-count split.
         mid = name.find(" ", len(name) // 2)
+        if mid == -1:
+            mid = name.rfind(" ", 0, len(name) // 2)
         if mid == -1:
             mid = len(name) // 2
         draw_text(surf, name[:mid], "tiny", text_color, x + w // 2, title_y - 6, "center")
         draw_text(surf, name[mid:].strip(), "tiny", text_color, x + w // 2, title_y + 7, "center")
-    else:
-        draw_text(surf, name, "small", text_color, x + w // 2, title_y, "center")
 
     # Card icon / art area (center)
     art_cx = x + w // 2

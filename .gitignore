@@ -4,3 +4,7 @@ __pycache__/
 # bang/ai_weights.json and bang/winrate_model.json are trained-model
 # artifacts produced by train_ai.py and are committed intentionally so
 # the game ships with a trained Hard AI / win-rate model out of the box.
+
+# bang/ai_baseline.json is per-installation interactive-play session state
+# (Hard AI's reward baseline EMA), not a training artifact — not committed.
+bang/ai_baseline.json
