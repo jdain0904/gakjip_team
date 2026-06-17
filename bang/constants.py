@@ -25,6 +25,14 @@ ROLE_COLORS = {
     "배신자":  PURPLE,
 }
 
+# Table/background gradient tones
+BG_TOP    = ( 34, 22, 11)
+BG_BOTTOM = ( 14,  8,  3)
+WOOD_DRK  = ( 54, 32, 14)
+WOOD_LGT  = (124, 80, 40)
+FELT_DRK  = ( 14, 38, 18)
+FELT_LGT  = ( 46, 104, 50)
+
 HP_COLOR       = RED
 HP_EMPTY_COLOR = DIM
 CARD_BROWN_BG  = (92, 58, 24)

@@ -6,6 +6,7 @@ from constants import (
     BLUE, PURPLE, ACCENT, YELLOW, ORANGE, DARK_RED,
     ROLE_COLORS, CARD_W, CARD_H, BOARD_CX, BOARD_CY, PLAYER_RADIUS,
     WIN_W, WIN_H, AI_STEP_MS,
+    BG_TOP, BG_BOTTOM, WOOD_DRK, WOOD_LGT, FELT_DRK, FELT_LGT,
 )
 from cards import CardType, Suit
 from roles import Role
@@ -15,7 +16,7 @@ from ai_agent import BangAI, _default_w
 from ai_probability import CardCounter
 from ai_strategy import score_play_actions, rank_of_action
 import player_skill
-from ui_utils import draw_text, rounded_rect, Button, font
+from ui_utils import draw_text, rounded_rect, Button, font, vertical_gradient, radial_vignette
 from card_renderer import draw_game_card
 
 
@@ -25,22 +26,69 @@ HP_ON       = (210, 50, 42)
 HP_OFF      = (55, 42, 30)
 
 
-class CardAnim:
-    FRAMES = 28
-    def __init__(self, label, start, end, color):
-        self.label = label; self.start = start; self.end = end
-        self.color = color; self.frame = 0
-    def update(self): self.frame += 1
+class PlayedCardPopup:
+    """Large centered flash of a card the instant it's played — fades in,
+    holds, fades out. A new popup simply replaces whatever is showing, so
+    a brisk AI turn never has to queue or block on this purely cosmetic effect.
+    """
+    IN_MS    = 150
+    HOLD_MS  = 500
+    OUT_MS   = 220
+    TOTAL_MS = IN_MS + HOLD_MS + OUT_MS
+
+    def __init__(self, card, actor_name: str, target_name: str | None = None):
+        self.card = card
+        self.actor_name = actor_name
+        self.target_name = target_name
+        self.t = 0
+
+    def update(self, dt_ms: int):
+        self.t += dt_ms
+
     @property
-    def done(self): return self.frame >= self.FRAMES
-    def draw(self, surf):
-        t = self.frame / self.FRAMES
-        t = t * t * (3 - 2 * t)
-        x = int(self.start[0] + (self.end[0] - self.start[0]) * t)
-        y = int(self.start[1] + (self.end[1] - self.start[1]) * t)
-        r = pygame.Rect(x - 32, y - 22, 64, 44)
-        rounded_rect(surf, self.color, r, 6)
-        draw_text(surf, self.label, "tiny", WHITE, r.centerx, r.centery, "center")
+    def done(self) -> bool:
+        return self.t >= self.TOTAL_MS
+
+    def draw(self, surf: pygame.Surface):
+        t = self.t
+        if t < self.IN_MS:
+            e = t / self.IN_MS
+            e = e * e * (3 - 2 * e)
+            scale, alpha = 0.7 + 0.3 * e, e
+        elif t < self.IN_MS + self.HOLD_MS:
+            scale, alpha = 1.0, 1.0
+        else:
+            e = min(1.0, (t - self.IN_MS - self.HOLD_MS) / self.OUT_MS)
+            e = e * e * (3 - 2 * e)
+            scale, alpha = 1.0 + 0.06 * e, 1.0 - e
+        a255 = max(0, min(255, int(255 * alpha)))
+
+        if a255 > 3:
+            dim = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
+            dim.fill((0, 0, 0, int(135 * alpha)))
+            surf.blit(dim, (0, 0))
+
+        cw, ch = int(CARD_W * 3.0), int(CARD_H * 3.0)
+        cap_h  = 56
+        content = pygame.Surface((cw + 24, ch + cap_h), pygame.SRCALPHA)
+        card_rect = pygame.Rect(12, 8, cw, ch)
+        shadow = card_rect.inflate(10, 10).move(4, 7)
+        pygame.draw.rect(content, (0, 0, 0, 140), shadow, border_radius=16)
+        draw_game_card(content, self.card, card_rect.x, card_rect.y, cw, ch)
+
+        cx = content.get_width() // 2
+        sub = f"{self.actor_name} 사용"
+        if self.target_name:
+            sub += f"  →  {self.target_name}"
+        draw_text(content, self.card.name, "large", GOLD, cx, ch + 16, "center")
+        draw_text(content, sub, "small", WHITE, cx, ch + 40, "center")
+
+        sw = max(1, int(content.get_width() * scale))
+        sh = max(1, int(content.get_height() * scale))
+        scaled = pygame.transform.smoothscale(content, (sw, sh))
+        scaled.set_alpha(a255)
+        rect = scaled.get_rect(center=(WIN_W // 2, WIN_H // 2 - 6))
+        surf.blit(scaled, rect)
 
 
 class GameScreen:
@@ -51,7 +99,8 @@ class GameScreen:
     def __init__(self, screen: pygame.Surface, gs: GameState, ai_difficulty: int = 1):
         self.screen = screen
         self.gs     = gs
-        self.anims: list[CardAnim] = []
+        self.card_popup: PlayedCardPopup | None = None
+        self._anim_clock = 0
 
         self.ai: dict[int, BangAI] = {
             i: BangAI(i, difficulty=ai_difficulty)
@@ -65,6 +114,14 @@ class GameScreen:
         self.kit_selected_local: list[int] = []   # which cards picked so far by human
 
         self._player_positions = _compute_positions(gs.num_players)
+
+        self._bg_surf    = _build_bg_surface()
+        self._board_surf = _build_board_surface()
+        self._board_pos  = (BOARD_CX - self._board_surf.get_width() // 2,
+                             BOARD_CY - self._board_surf.get_height() // 2)
+        self._panel_grad = vertical_gradient(
+            WIN_W - self.RIGHT_X + 6, WIN_H,
+            tuple(min(255, c + 12) for c in PANEL_BG), PANEL_DARK)
 
         self.btn_menu    = Button((WIN_W - 118, 8, 108, 34), "← 메뉴", DIM, radius=7)
         self.btn_endturn = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
@@ -231,12 +288,14 @@ class GameScreen:
                 self.target_candidates = tgts
             else:
                 self._score_human_play(pid, card)
+                self._spawn_popup(card, pid)
                 gs.play_card(pid, ci)
                 self._on_phase_change()
 
     def _exec_with_target(self, pid, card_idx, target_id):
         card = self.gs.players[pid].hand[card_idx]
         self._score_human_play(pid, card, target_id)
+        self._spawn_popup(card, pid, target_id)
         self.gs.play_card(pid, card_idx, target_id=target_id, target_card_idx=0)
         self._deselect()
         self._on_phase_change()
@@ -260,6 +319,12 @@ class GameScreen:
         rank  = rank_of_action(ranked, ct, target_id)
         state = player_skill.update_skill(player_skill.load_skill(), rank, len(ranked))
         player_skill.save_skill(state)
+
+    def _spawn_popup(self, card, actor_pid: int, target_pid: int = -1):
+        """Flash a large copy of the card that was just played at screen center."""
+        actor  = self.gs.players[actor_pid].name
+        target = self.gs.players[target_pid].name if target_pid >= 0 else None
+        self.card_popup = PlayedCardPopup(card, actor, target)
 
     # ── RESPONSE ──────────────────────────────────────────────────────────
     def _handle_response(self, event, pos, pid):
@@ -287,6 +352,7 @@ class GameScreen:
                      and (card.card_type == (CardType.BANG if need_bang else CardType.MISSED)
                           or p.is_calamity_janet()))
             if valid:
+                self._spawn_popup(card, pid)
                 gs.respond_with_missed(ci)
                 self._on_phase_change()
 
@@ -308,6 +374,7 @@ class GameScreen:
             valid = (card.card_type == CardType.BANG
                      or (p.is_calamity_janet() and card.card_type == CardType.MISSED))
             if valid:
+                self._spawn_popup(card, pid)
                 gs.duel_play_bang(ci)
                 self._on_phase_change()
 
@@ -410,10 +477,11 @@ class GameScreen:
     # AI processing
     # ═════════════════════════════════════════════════════════════════════
     def update(self, dt_ms: int):
-        for a in self.anims[:]:
-            a.update()
-            if a.done:
-                self.anims.remove(a)
+        self._anim_clock += dt_ms
+        if self.card_popup:
+            self.card_popup.update(dt_ms)
+            if self.card_popup.done:
+                self.card_popup = None
 
         gs = self.gs
         if gs.phase == Phase.GAME_OVER:
@@ -493,6 +561,8 @@ class GameScreen:
                 return
             action = self.ai[pid].choose_response(gs)
             if action[0] == "missed":
+                card = gs.players[pid].hand[action[1]]
+                self._spawn_popup(card, pid)
                 gs.respond_with_missed(action[1])
             else:
                 gs.respond_take_hit()
@@ -505,6 +575,8 @@ class GameScreen:
                 return
             action = self.ai[pid].choose_duel_response(gs)
             if action[0] == "bang":
+                card = gs.players[pid].hand[action[1]]
+                self._spawn_popup(card, pid)
                 gs.duel_play_bang(action[1])
             else:
                 gs.duel_take_hit()
@@ -542,10 +614,16 @@ class GameScreen:
             elif action[0] == "sid_ketchum":
                 gs.use_sid_ketchum(pid, action[1], action[2])
             elif len(action) == 2:
+                card = gs.players[pid].hand[action[1]]
+                self._spawn_popup(card, pid)
                 gs.play_card(pid, action[1])
             elif len(action) == 3:
+                card = gs.players[pid].hand[action[1]]
+                self._spawn_popup(card, pid, action[2])
                 gs.play_card(pid, action[1], target_id=action[2])
             elif len(action) == 4:
+                card = gs.players[pid].hand[action[1]]
+                self._spawn_popup(card, pid, action[2])
                 gs.play_card(pid, action[1], target_id=action[2], target_card_idx=action[3])
             self._on_phase_change()
 
@@ -645,7 +723,7 @@ class GameScreen:
     # ═════════════════════════════════════════════════════════════════════
     def draw(self):
         s = self.screen
-        s.fill(BG)
+        s.blit(self._bg_surf, (0, 0))
         self._draw_board()
         self._draw_players()
         self._draw_right_panel()
@@ -654,8 +732,8 @@ class GameScreen:
         self._draw_kit_peek_overlay()
         self._draw_char_draw_overlay()
         self._draw_phase_banner()
-        for a in self.anims:
-            a.draw(s)
+        if self.card_popup:
+            self.card_popup.draw(s)
         if self.gs.phase == Phase.GAME_OVER:
             self._draw_game_over()
         pos = pygame.mouse.get_pos()
@@ -663,16 +741,13 @@ class GameScreen:
         pygame.display.flip()
 
     def _draw_board(self):
-        s = self.screen
-        pygame.draw.ellipse(s, (18, 48, 22),
-                            pygame.Rect(BOARD_CX - 280, BOARD_CY - 200, 560, 400))
-        pygame.draw.ellipse(s, (28, 68, 32),
-                            pygame.Rect(BOARD_CX - 275, BOARD_CY - 195, 550, 390), 2)
+        self.screen.blit(self._board_surf, self._board_pos)
 
     def _draw_players(self):
         s   = self.screen
         gs  = self.gs
         pos = pygame.mouse.get_pos()
+        pulse = (math.sin(self._anim_clock / 260.0) + 1) / 2   # 0..1 breathing glow
 
         for pid, (px, py) in self._player_positions.items():
             p   = gs.players[pid]
@@ -686,20 +761,29 @@ class GameScreen:
             is_target    = pid in self.target_candidates
 
             R = 42
+            glow_k = 0.32 + 0.22 * pulse
             # Glows
             if is_active:
-                for gr in (R+16, R+10, R+5):
-                    pygame.draw.circle(s, tuple(int(c * .45) for c in GOLD), (px, py), gr)
+                for gr in (R+18, R+12, R+6):
+                    pygame.draw.circle(s, tuple(int(c * glow_k) for c in GOLD), (px, py), gr)
             if is_responder or is_beer_save:
-                for gr in (R+16, R+10, R+5):
-                    pygame.draw.circle(s, tuple(int(c * .45) for c in RED), (px, py), gr)
+                for gr in (R+18, R+12, R+6):
+                    pygame.draw.circle(s, tuple(int(c * glow_k) for c in RED), (px, py), gr)
             if is_target:
-                for gr in (R+18, R+11, R+5):
+                for gr in (R+20, R+13, R+6):
                     pygame.draw.circle(s, (60, 140, 60), (px, py), gr)
 
             base = tuple(int(c * dim) for c in col)
+
+            # Grounding shadow + seat disc
+            pygame.draw.circle(s, (8, 5, 2), (px + 3, py + 5), R + 3)
             pygame.draw.circle(s, (20, 14, 6), (px, py), R)
             pygame.draw.circle(s, base, (px, py), R, 3 if p.alive else 1)
+            if p.alive:
+                # Soft upper-left sheen for a glossy, less flat token
+                sheen = pygame.Rect(px - R + 5, py - R + 5, (R - 5) * 2, (R - 5) * 2)
+                pygame.draw.arc(s, tuple(min(255, c + 55) for c in base),
+                                sheen, math.radians(110), math.radians(195), 2)
 
             if not p.alive:
                 # Draw X using lines (no unicode needed)
@@ -709,16 +793,25 @@ class GameScreen:
             else:
                 draw_text(s, f"P{pid+1}", "small", WHITE, px, py - 8, "center")
 
-            draw_text(s, p.name, "tiny", col if p.alive else GRAY, px, py + R + 4, "center")
+            # Nameplate panel (sized to fit the text it holds)
             role_lbl = p.role.value if p.role_revealed else "?"
-            draw_text(s, role_lbl, "tiny", col if p.role_revealed else DIM,
-                      px, py + R + 18, "center")
+            char_lbl = CHARACTERS[p.character].name_ko if p.character else None
+            lines    = [p.name, role_lbl] + ([char_lbl] if char_lbl else [])
+            fnt      = font("tiny")
+            plate_w  = max(fnt.size(t)[0] for t in lines) + 18
+            plate_h  = 14 * len(lines) + 10
+            plate    = pygame.Rect(0, 0, plate_w, plate_h)
+            plate.midtop = (px, py + R + 2)
+            rounded_rect(s, (14, 9, 4), plate, 6)
+            pygame.draw.rect(s, base if p.alive else DIM, plate, 1, border_radius=6)
 
-            # Character name
-            if p.character:
-                info = CHARACTERS[p.character]
-                draw_text(s, info.name_ko, "tiny", (160, 140, 80),
-                          px, py + R + 32, "center")
+            ly = plate.y + 7
+            draw_text(s, p.name, "tiny", col if p.alive else GRAY, px, ly, "center")
+            ly += 14
+            draw_text(s, role_lbl, "tiny", col if p.role_revealed else DIM, px, ly, "center")
+            if char_lbl:
+                ly += 14
+                draw_text(s, char_lbl, "tiny", (190, 165, 100), px, ly, "center")
 
             self._draw_hp(s, px, py - R - 22, p)
 
@@ -731,9 +824,10 @@ class GameScreen:
 
             # Equipment icons
             eq_x = px - len(p.equipment) * 14
+            eq_y = plate.bottom + 6
             for ci2, c in enumerate(p.equipment):
                 eq_col = (80, 80, 180) if c.is_blue else ORANGE
-                eq_r   = pygame.Rect(eq_x + ci2 * 28, py + R + 48, 26, 16)
+                eq_r   = pygame.Rect(eq_x + ci2 * 28, eq_y, 26, 16)
                 rounded_rect(s, eq_col, eq_r, 3)
                 draw_text(s, c.name[:4], "tiny", WHITE,
                           eq_r.centerx, eq_r.centery, "center")
@@ -754,13 +848,19 @@ class GameScreen:
         s  = self.screen
         gs = self.gs
         rx = self.RIGHT_X
-        pygame.draw.rect(s, PANEL_BG, pygame.Rect(rx - 6, 0, WIN_W - rx + 6, WIN_H))
+        s.blit(self._panel_grad, (rx - 6, 0))
+        pygame.draw.line(s, (70, 46, 18), (rx - 6, 0), (rx - 6, WIN_H), 2)
 
         if gs.phase not in (Phase.GAME_OVER,):
             pid = gs.current_pid
             col = ROLE_COLORS.get(gs.players[pid].role.value, ACCENT) \
                 if gs.players[pid].role_revealed else ACCENT
-            rounded_rect(s, col, pygame.Rect(rx, 8, WIN_W - rx - 10, 36), 8)
+            banner = pygame.Rect(rx, 8, WIN_W - rx - 10, 36)
+            shadow = banner.inflate(4, 4).move(0, 2)
+            rounded_rect(s, (10, 6, 2), shadow, 9)
+            rounded_rect(s, col, banner, 8)
+            pygame.draw.line(s, tuple(min(255, c + 40) for c in col),
+                              (banner.x + 6, banner.y + 2), (banner.right - 6, banner.y + 2), 1)
             draw_text(s, f"Turn {gs.turn_num + 1}  —  {gs.players[pid].name}",
                       "normal", BG, rx + (WIN_W - rx - 10) // 2, 26, "center")
 
@@ -769,26 +869,40 @@ class GameScreen:
             col   = ROLE_COLORS.get(p.role.value, GRAY) if p.role_revealed else GRAY
             h     = 58
             bg_c  = (35, 22, 8) if p.alive else (20, 14, 6)
-            rounded_rect(s, bg_c, pygame.Rect(rx, py2, WIN_W - rx - 8, h), 6)
+            row   = pygame.Rect(rx, py2, WIN_W - rx - 8, h)
+            rounded_rect(s, bg_c, row, 6)
+            # Role-colored accent tab on the left edge of every row
+            accent = pygame.Rect(row.x, row.y + 4, 4, row.h - 8)
+            rounded_rect(s, col if p.alive else DIM, accent, 2)
             if pid == gs.current_pid and p.alive:
-                pygame.draw.rect(s, col, pygame.Rect(rx, py2, WIN_W - rx - 8, h), 2, border_radius=6)
+                pygame.draw.rect(s, col, row, 2, border_radius=6)
 
-            pygame.draw.circle(s, col if p.alive else DIM, (rx + 14, py2 + h // 2), 8)
-            draw_text(s, p.name, "small", WHITE if p.alive else GRAY, rx + 26, py2 + 4)
+            pygame.draw.circle(s, col if p.alive else DIM, (rx + 16, py2 + h // 2), 8)
+            if p.alive:
+                pygame.draw.circle(s, (235, 225, 200), (rx + 14, py2 + h // 2 - 2), 2)
+            draw_text(s, p.name, "small", WHITE if p.alive else GRAY, rx + 28, py2 + 4)
 
             role_lbl = p.role.value if p.role_revealed else "?"
             char_lbl = CHARACTERS[p.character].name_ko if p.character else ""
-            draw_text(s, f"{role_lbl}  {char_lbl}", "tiny", col, rx + 26, py2 + 22)
+            draw_text(s, f"{role_lbl}  {char_lbl}", "tiny", col, rx + 28, py2 + 22)
 
-            bar_w    = WIN_W - rx - 65
+            bar_w    = WIN_W - rx - 67
             filled   = int(bar_w * (p.hp / p.max_hp)) if p.max_hp else 0
-            pygame.draw.rect(s, DIM,   (rx + 26, py2 + 40, bar_w, 8), border_radius=4)
-            pygame.draw.rect(s, HP_ON, (rx + 26, py2 + 40, filled, 8), border_radius=4)
+            bar_rect = pygame.Rect(rx + 28, py2 + 40, bar_w, 8)
+            pygame.draw.rect(s, DIM,   bar_rect, border_radius=4)
+            if filled > 0:
+                fill_rect = pygame.Rect(rx + 28, py2 + 40, filled, 8)
+                pygame.draw.rect(s, HP_ON, fill_rect, border_radius=4)
+                pygame.draw.line(s, (250, 140, 130),
+                                  (fill_rect.x + 2, fill_rect.y + 2),
+                                  (fill_rect.right - 2, fill_rect.y + 2), 1)
             draw_text(s, f"{p.hp}/{p.max_hp}", "tiny", col,
-                      rx + 28 + bar_w, py2 + 37)
+                      rx + 30 + bar_w, py2 + 37)
             py2 += h + 3
 
         py2 += 6
+        pygame.draw.line(s, (70, 46, 18), (rx + 2, py2), (WIN_W - 10, py2), 1)
+        py2 += 10
         draw_text(s, "게임 로그", "small", GRAY, rx + 2, py2)
         py2 += 20
         for line in gs.log[-(self.LOG_MAX - gs.num_players * 2):]:
@@ -829,8 +943,10 @@ class GameScreen:
         s  = self.screen
         hx, hy = self._hand_origin(show_pid)
         hand_w  = len(p.hand) * self.CARD_SPACING + (CARD_W - self.CARD_SPACING)
-        rounded_rect(s, PANEL_DARK,
-                     pygame.Rect(hx - 8, hy - 30, max(hand_w + 16, 200), CARD_H + 64), 10)
+        panel = pygame.Rect(hx - 8, hy - 30, max(hand_w + 16, 200), CARD_H + 64)
+        rounded_rect(s, (10, 6, 2), panel.inflate(6, 6).move(0, 4), 12)
+        rounded_rect(s, PANEL_DARK, panel, 10)
+        pygame.draw.rect(s, (96, 64, 26), panel, 1, border_radius=10)
 
         char_lbl = f" [{CHARACTERS[p.character].name_ko}]" if p.character else ""
         labels = {
@@ -990,9 +1106,9 @@ class GameScreen:
                 val_str = {1: "A", 11: "J", 12: "Q", 13: "K"}.get(top.value, str(top.value))
                 # Draw card info: name + suit icon + value, centered
                 icon_y = panel.y + 76
-                left_r  = draw_text(s, f"[ {top.name}", "sub", suit_col, cx - 10, icon_y, "right")
+                left_r  = draw_text(s, f"[ {top.name}", "sub", suit_col, cx - 10, icon_y, "midright")
                 draw_suit_icon(s, top.suit.value, cx - 2, icon_y, 14, suit_col)
-                draw_text(s, f"{val_str} ]", "sub", suit_col, cx + 8, icon_y, "left")
+                draw_text(s, f"{val_str} ]", "sub", suit_col, cx + 8, icon_y, "midleft")
             else:
                 draw_text(s, "(버림더미 비어있음)", "small", GRAY, cx, panel.y + 76, "center")
 
@@ -1022,7 +1138,15 @@ class GameScreen:
         }
         if gs.phase in banners:
             label, col = banners[gs.phase]
-            draw_text(self.screen, label, "small", col, BOARD_CX, 14, "center")
+            s   = self.screen
+            fnt = font("small")
+            tw, th = fnt.size(label)
+            pill = pygame.Rect(0, 0, tw + 44, th + 16)
+            pill.midtop = (BOARD_CX, 6)
+            rounded_rect(s, (10, 6, 2), pill.inflate(4, 4).move(0, 2), pill.h // 2)
+            rounded_rect(s, (18, 12, 5), pill, pill.h // 2)
+            pygame.draw.rect(s, col, pill, 2, border_radius=pill.h // 2)
+            draw_text(s, label, "small", col, pill.centerx, pill.centery, "center")
 
     # ── Game over ─────────────────────────────────────────────────────────
     def _draw_game_over(self):
@@ -1062,3 +1186,58 @@ def _compute_positions(n: int) -> dict[int, tuple[int, int]]:
 def _worst_card_idx(hand) -> int:
     priority = {CardType.MISSED: 0, CardType.BEER: 1}
     return min(range(len(hand)), key=lambda i: priority.get(hand[i].card_type, 5))
+
+
+def _build_bg_surface() -> pygame.Surface:
+    """Backdrop gradient + vignette, built once and reused every frame."""
+    surf = vertical_gradient(WIN_W, WIN_H, BG_TOP, BG_BOTTOM)
+    surf.blit(radial_vignette(WIN_W, WIN_H, max_alpha=140), (0, 0))
+    return surf
+
+
+def _build_board_surface() -> pygame.Surface:
+    """Wooden-rimmed felt table, built once and blitted at board position."""
+    outer_w, outer_h = 560, 400
+    felt_w, felt_h   = 492, 348
+    core_w, core_h   = 150, 100
+    pad = 36
+    w, h = outer_w + pad * 2, outer_h + pad * 2
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    cx, cy = w // 2, h // 2
+
+    # Soft contact shadow under the table
+    for i in range(12, 0, -1):
+        a = min(85, 7 * i)
+        rect = pygame.Rect(0, 0, outer_w + i * 5, outer_h + i * 5)
+        rect.center = (cx, cy + 12)
+        pygame.draw.ellipse(surf, (0, 0, 0, a), rect)
+
+    # Wooden rim — gradient bands from dark outer edge to lighter inner edge
+    rim_steps = 16
+    for i in range(rim_steps):
+        t = i / (rim_steps - 1)
+        col = tuple(int(WOOD_DRK[c] + (WOOD_LGT[c] - WOOD_DRK[c]) * t) for c in range(3))
+        rw = int(outer_w + (felt_w - outer_w) * t)
+        rh = int(outer_h + (felt_h - outer_h) * t)
+        rect = pygame.Rect(0, 0, rw, rh)
+        rect.center = (cx, cy)
+        pygame.draw.ellipse(surf, col, rect)
+
+    # Felt interior — gradient from shadowed edge to lit center
+    felt_steps = 18
+    for i in range(felt_steps, -1, -1):
+        t = i / felt_steps
+        col = tuple(int(FELT_LGT[c] + (FELT_DRK[c] - FELT_LGT[c]) * t) for c in range(3))
+        rw = int(core_w + (felt_w - core_w) * t)
+        rh = int(core_h + (felt_h - core_h) * t)
+        rect = pygame.Rect(0, 0, rw, rh)
+        rect.center = (cx, cy)
+        pygame.draw.ellipse(surf, col, rect)
+
+    # Crisp rim edge + faint inner highlight ring
+    outer_rect = pygame.Rect(0, 0, outer_w, outer_h); outer_rect.center = (cx, cy)
+    pygame.draw.ellipse(surf, (32, 19, 8), outer_rect, 3)
+    felt_rect = pygame.Rect(0, 0, felt_w, felt_h); felt_rect.center = (cx, cy)
+    pygame.draw.ellipse(surf, (96, 168, 92), felt_rect, 2)
+
+    return surf

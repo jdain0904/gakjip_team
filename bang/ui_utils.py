@@ -1,4 +1,5 @@
 """Shared UI helpers for all screens."""
+import math
 import pygame
 from constants import WHITE, GRAY, DIM
 
@@ -77,6 +78,30 @@ def rounded_rect(surf, color, rect, r=10, border=0, bc=None):
     pygame.draw.rect(surf, color, rect, border_radius=r)
     if border:
         pygame.draw.rect(surf, bc or WHITE, rect, border, border_radius=r)
+
+
+def vertical_gradient(w: int, h: int, top, bottom) -> pygame.Surface:
+    """Build a Surface filled with a smooth top-to-bottom color gradient."""
+    surf = pygame.Surface((max(1, w), max(1, h)))
+    h = max(1, h)
+    for y in range(h):
+        t = y / max(1, h - 1)
+        col = tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3))
+        pygame.draw.line(surf, col, (0, y), (w, y))
+    return surf
+
+
+def radial_vignette(w: int, h: int, max_alpha: int = 130, steps: int = 28) -> pygame.Surface:
+    """Build a transparent Surface that darkens smoothly toward the edges."""
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    cx, cy = w / 2, h / 2
+    max_r = math.hypot(cx, cy)
+    for i in range(steps):
+        r = max_r * (i + 1) / steps
+        a = int(max_alpha * (i / (steps - 1)) ** 1.5) if steps > 1 else max_alpha
+        ring_w = int(max_r / steps) + 2
+        pygame.draw.circle(surf, (0, 0, 0, a), (cx, cy), int(r), ring_w)
+    return surf
 
 
 class Button:
