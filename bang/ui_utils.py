@@ -8,23 +8,20 @@ _fonts: dict[str, pygame.font.Font] = {}
 
 
 def init_fonts():
-    candidates = ["malgungothic", "malgun gothic", "nanumgothic", "gulim",
-                  "notosanskr", "freesansbold", "dejavusans", "arial"]
+    # pygame.font.SysFont() never fails — for an unknown name it silently
+    # substitutes a Latin-only default, so picking the first candidate that
+    # "works" picked the wrong font on systems without the Windows/Mac
+    # Korean font names. match_font() actually resolves a name to an
+    # installed font file (or None), so use that to find a real match.
+    candidates = ["malgungothic", "malgun gothic", "applegothic", "nanumgothic",
+                  "gulim", "dotum", "notosanskr", "notosanscjkkr",
+                  "wenquanyizenhei", "unifont", "dejavusans", "arial"]
     sizes = {"title": 44, "large": 32, "sub": 22,
              "normal": 18, "small": 15, "tiny": 12}
+    chosen = next((n for n in candidates if pygame.font.match_font(n)), None)
     for key, sz in sizes.items():
-        loaded = False
-        for name in candidates:
-            try:
-                f = pygame.font.SysFont(name, sz)
-                if f:
-                    _fonts[key] = f
-                    loaded = True
-                    break
-            except Exception:
-                pass
-        if not loaded:
-            _fonts[key] = pygame.font.Font(None, sz + 4)
+        _fonts[key] = (pygame.font.SysFont(chosen, sz) if chosen
+                       else pygame.font.Font(None, sz + 4))
 
 
 def font(key: str) -> pygame.font.Font:
