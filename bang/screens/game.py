@@ -102,6 +102,8 @@ class GameScreen:
         self.card_popup: PlayedCardPopup | None = None
         self._anim_clock = 0
         self._hover_pid: int | None = None
+        self._hover_card = None
+        self._hover_card_pos: tuple[int, int] | None = None
 
         self.ai: dict[int, BangAI] = {
             i: BangAI(i, difficulty=ai_difficulty)
@@ -737,6 +739,8 @@ class GameScreen:
     def draw(self):
         s = self.screen
         s.blit(self._bg_surf, (0, 0))
+        self._hover_card = None
+        self._hover_card_pos = None
         self._draw_board()
         self._draw_deck_discard()
         self._draw_players()
@@ -749,6 +753,8 @@ class GameScreen:
         if (self._hover_pid is not None and self.gs.phase not in
                 (Phase.GEN_STORE, Phase.KIT_PEEK, Phase.CHAR_DRAW, Phase.GAME_OVER)):
             self._draw_player_tooltip(self._hover_pid)
+        if self._hover_card is not None:
+            self._draw_card_tooltip(self._hover_card, *self._hover_card_pos)
         if self.card_popup:
             self.card_popup.draw(s)
         if self.gs.phase == Phase.GAME_OVER:
@@ -788,6 +794,10 @@ class GameScreen:
                 off = i * 2
                 draw_game_card(s, None, disc_x + off, y - off, dw, dh, face_down=True)
             draw_game_card(s, gs.discard[-1], disc_x, y, dw, dh)
+            if (gs.phase not in (Phase.GEN_STORE, Phase.KIT_PEEK, Phase.CHAR_DRAW, Phase.GAME_OVER)
+                    and pygame.Rect(disc_x, y, dw, dh).collidepoint(pygame.mouse.get_pos())):
+                self._hover_card = gs.discard[-1]
+                self._hover_card_pos = (disc_x + dw // 2, y)
         else:
             rect = pygame.Rect(disc_x, y, dw, dh)
             rounded_rect(s, (20, 14, 6), rect, 8)
@@ -881,6 +891,9 @@ class GameScreen:
                 rounded_rect(s, eq_col, eq_r, 3)
                 draw_text(s, c.name[:4], "tiny", WHITE,
                           eq_r.centerx, eq_r.centery, "center")
+                if eq_r.collidepoint(pos):
+                    self._hover_card = c
+                    self._hover_card_pos = (eq_r.centerx, eq_r.top)
 
     def _draw_hp(self, s, cx, cy, player):
         r   = 8
@@ -954,6 +967,39 @@ class GameScreen:
         pygame.draw.circle(surf, (205, 40, 35), (bx, by), badge_r)
         pygame.draw.circle(surf, WHITE, (bx, by), badge_r, 2)
         draw_text(surf, str(n), "tiny", WHITE, bx, by, "center")
+
+    # ── Card hover tooltip (name + rule summary) ────────────────────────────
+    def _draw_card_tooltip(self, card, anchor_x: int, anchor_y: int):
+        """Small popup with a card's full name + a brief rule summary, shown
+        while the mouse hovers over any rendered copy of that card."""
+        s = self.screen
+        lines = _wrap_text(card.desc, "tiny", 220)
+
+        pad, name_h, line_h = 10, 20, 16
+        text_w  = max([font("tiny").size(l)[0] for l in lines] +
+                      [font("small").size(card.name)[0]])
+        panel_w = text_w + pad * 2
+        panel_h = pad + name_h + len(lines) * line_h + pad
+
+        bx = anchor_x - panel_w // 2
+        by = anchor_y - panel_h - 10
+        if by < 6:
+            by = anchor_y + 20
+        bx = max(6, min(WIN_W - panel_w - 6, bx))
+        by = max(6, min(WIN_H - panel_h - 6, by))
+
+        panel  = pygame.Rect(bx, by, panel_w, panel_h)
+        shadow = panel.inflate(6, 6).move(0, 4)
+        rounded_rect(s, (8, 5, 2), shadow, 10)
+        rounded_rect(s, PANEL_BG, panel, 10)
+        pygame.draw.rect(s, GOLD, panel, 2, border_radius=10)
+
+        ty = panel.y + pad
+        draw_text(s, card.name, "small", GOLD, panel.centerx, ty, "center")
+        ty += name_h
+        for line in lines:
+            draw_text(s, line, "tiny", WHITE, panel.centerx, ty, "center")
+            ty += line_h
 
     # ── Right panel ───────────────────────────────────────────────────────
     def _draw_right_panel(self):
@@ -1082,6 +1128,9 @@ class GameScreen:
             self._draw_card(s, card, hx + i * self.CARD_SPACING, hy + lift,
                             is_sel, playable or is_resp or is_beer,
                             gs.phase == Phase.DISCARD)
+            if hover:
+                self._hover_card = card
+                self._hover_card_pos = (hx + i * self.CARD_SPACING + CARD_W // 2, hy + lift)
 
         if gs.phase == Phase.PLAY:
             self.btn_endturn.draw(s, self.btn_endturn.is_hovered(pos))
@@ -1134,6 +1183,9 @@ class GameScreen:
         for i, card in enumerate(pile):
             hover = pygame.Rect(ox + i * 96, cy - 60, CARD_W, CARD_H).collidepoint(pos)
             self._draw_card(s, card, ox + i * 96, cy - 60, False, hover)
+            if hover:
+                self._hover_card = card
+                self._hover_card_pos = (ox + i * 96 + CARD_W // 2, cy - 60)
 
     # ── Kit Carlson peek overlay ───────────────────────────────────────────
     def _draw_kit_peek_overlay(self):
@@ -1159,6 +1211,9 @@ class GameScreen:
             hover   = pygame.Rect(ox + i * 100, cy - 65, CARD_W, CARD_H).collidepoint(pos)
             self._draw_card(s, card, ox + i * 100, cy - 65,
                             selected=already, playable=hover and not already)
+            if hover:
+                self._hover_card = card
+                self._hover_card_pos = (ox + i * 100 + CARD_W // 2, cy - 65)
 
     # ── Character draw overlay ────────────────────────────────────────────
     def _draw_char_draw_overlay(self):
@@ -1298,6 +1353,23 @@ def _compute_positions(n: int) -> dict[int, tuple[int, int]]:
 def _worst_card_idx(hand) -> int:
     priority = {CardType.MISSED: 0, CardType.BEER: 1}
     return min(range(len(hand)), key=lambda i: priority.get(hand[i].card_type, 5))
+
+
+def _wrap_text(text: str, fkey: str, max_w: int) -> list[str]:
+    """Break text into lines that each fit within max_w pixels at font fkey."""
+    f = font(fkey)
+    words = text.split(" ")
+    lines, cur = [], ""
+    for w in words:
+        trial = f"{cur} {w}".strip()
+        if not cur or f.size(trial)[0] <= max_w:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
 
 
 def _build_bg_surface() -> pygame.Surface:
