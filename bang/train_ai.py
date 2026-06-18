@@ -39,7 +39,7 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from cards import CardType
-from game_state import GameState, Phase
+from game_state import GameState, Phase, RespType
 from ai_agent import BangAI, DEFAULT_WEIGHTS, _save_weights
 from ai_features import state_vector, FEATURE_NAMES
 from winrate_model import WinRateModel
@@ -100,7 +100,8 @@ def play_one_game(gs: GameState, ais: dict[int, BangAI], max_steps: int = 20000)
         if ph == Phase.RESPONSE:
             pid = gs.resp_current
             if pid < 0: continue
-            if not gs.barrel_checked and gs.players[pid].has_barrel():
+            if (gs.resp_type != RespType.INDIANS and not gs.barrel_checked
+                    and gs.players[pid].has_barrel()):
                 gs.check_barrel(); continue
             action = ais[pid].choose_response(gs)
             gs.respond_with_missed(action[1]) if action[0] == "missed" else gs.respond_take_hit()

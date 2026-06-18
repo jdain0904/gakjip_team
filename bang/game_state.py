@@ -320,6 +320,11 @@ class GameState:
             c = self._draw()
             if c:
                 self.kit_peek_cards.append(c)
+        if not self.kit_peek_cards:
+            # Deck and discard both exhausted — nothing to peek at, skip straight to PLAY.
+            self.bang_used = False
+            self.phase = Phase.PLAY
+            return
         self.log_msg(f"◇ 킷 칼슨: 상위 {len(self.kit_peek_cards)}장 공개")
         self.phase = Phase.KIT_PEEK
 
@@ -329,7 +334,7 @@ class GameState:
         if card_idx in self.kit_selected:
             return False
         self.kit_selected.append(card_idx)
-        if len(self.kit_selected) == 2:
+        if len(self.kit_selected) == 2 or len(self.kit_selected) >= len(self.kit_peek_cards):
             p = self.players[self.current_pid]
             for i in self.kit_selected:
                 p.hand.append(self.kit_peek_cards[i])
