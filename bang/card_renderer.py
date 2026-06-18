@@ -187,6 +187,24 @@ def _fit_text(surf, text, fkey, color, cx, y, max_w, anchor="center"):
     return draw_text(surf, text, fkey, color, cx, y, anchor)
 
 
+def _wrap_lines(text: str, fkey: str, max_w: int) -> list[str]:
+    """Greedy word-wrap text into lines that fit max_w at the given font."""
+    from ui_utils import font as get_font
+    fnt = get_font(fkey)
+    words = text.split()
+    line, lines = "", []
+    for tok in words:
+        test = (line + " " + tok).strip()
+        if fnt.size(test)[0] > max_w:
+            lines.append(line)
+            line = tok
+        else:
+            line = test
+    if line:
+        lines.append(line)
+    return lines
+
+
 # ── Bullet (HP) icons ─────────────────────────────────────────────────────────
 
 def draw_bullets(surf: pygame.Surface, n: int, x: int, y: int, size=10):
@@ -343,11 +361,12 @@ def _draw_renegade_hat(surf, cx, cy, r):
 
 
 def draw_role_card(surf: pygame.Surface, role: Role, rect: pygame.Rect):
-    from ui_utils import draw_text, font as get_font
+    from ui_utils import draw_text
     # ── Image override ────────────────────────────────────────────────────
     img = _load(os.path.join("roles", _ROLE_FILE[role]))
     if img:
         _blit_card_image(surf, img, rect)
+        _overlay_role_text(surf, role, rect)
         return
     # ── Programmatic fallback ─────────────────────────────────────────────
     draw_parchment_frame(surf, rect)
@@ -383,20 +402,7 @@ def draw_role_card(surf: pygame.Surface, role: Role, rect: pygame.Rect):
 
     # Objective text
     obj_y = ill_y + ill_h + 10
-    obj = ROLE_OBJ_KO[role]
-    fnt = get_font("small")
-    words = obj.split()
-    line, lines = "", []
-    for w_tok in words:
-        test = (line + " " + w_tok).strip()
-        if fnt.size(test)[0] > rect.w - 28:
-            lines.append(line)
-            line = w_tok
-        else:
-            line = test
-    if line:
-        lines.append(line)
-    for li, txt in enumerate(lines):
+    for li, txt in enumerate(_wrap_lines(ROLE_OBJ_KO[role], "small", rect.w - 28)):
         draw_text(surf, txt, "small", TEXT_MID,
                   rect.centerx, obj_y + li * 18, "center")
 
@@ -407,6 +413,31 @@ def draw_role_card(surf: pygame.Surface, role: Role, rect: pygame.Rect):
     pygame.draw.rect(surf, fill, bar, border_radius=6)
     draw_text(surf, name_ko, "tiny", (255, 255, 255),
               bar.centerx, bar.centery, "center")
+
+
+def _overlay_role_text(surf: pygame.Surface, role: Role, rect: pygame.Rect):
+    """Photo assets replace the whole role card but carry no printed text,
+    so overlay the role name + objective that a real card would have
+    printed on it, on translucent bands so it stays legible over any art."""
+    from ui_utils import draw_text
+    x, y, w, h = rect
+
+    top = pygame.Rect(x, y, w, 32)
+    ov = pygame.Surface((top.w, top.h), pygame.SRCALPHA)
+    ov.fill((12, 9, 4, 190))
+    surf.blit(ov, top.topleft)
+    draw_text(surf, ROLE_NAME_KO[role], "large", (255, 250, 235),
+              rect.centerx, y + 6, "center")
+
+    lines = _wrap_lines(ROLE_OBJ_KO[role], "small", w - 24)
+    band_h = 12 + len(lines) * 18
+    band = pygame.Rect(x, y + h - band_h, w, band_h)
+    ov2 = pygame.Surface((band.w, band.h), pygame.SRCALPHA)
+    ov2.fill((12, 9, 4, 190))
+    surf.blit(ov2, band.topleft)
+    for li, txt in enumerate(lines):
+        draw_text(surf, txt, "small", (225, 218, 200),
+                  rect.centerx, band.y + 6 + li * 18, "center")
 
 
 # ── CHARACTER CARD ────────────────────────────────────────────────────────────
@@ -551,17 +582,17 @@ def draw_character_card(surf: pygame.Surface,
                         char: CharacterType,
                         max_hp: int,
                         rect: pygame.Rect):
-    from ui_utils import draw_text, font as get_font
+    from ui_utils import draw_text
+    info = CHARACTERS[char]
     # ── Image override ────────────────────────────────────────────────────
     img = _load(os.path.join("characters", _CHAR_FILE[char]))
     if img:
         _blit_card_image(surf, img, rect)
+        _overlay_char_text(surf, info, max_hp, rect)
         return
     # ── Programmatic fallback ─────────────────────────────────────────────
     draw_character_frame(surf, rect)
     x, y, w, h = rect
-
-    info = CHARACTERS[char]
 
     # Title
     title_y = y + 10
@@ -589,22 +620,38 @@ def draw_character_card(surf: pygame.Surface,
 
     # Description
     desc_y = bar_y + 20
-    fnt = get_font("tiny")
-    desc = info.desc
-    words = desc.split()
-    line, lines = "", []
-    for tok in words:
-        test = (line + " " + tok).strip()
-        if fnt.size(test)[0] > w - 20:
-            lines.append(line)
-            line = tok
-        else:
-            line = test
-    if line:
-        lines.append(line)
-    for li, txt in enumerate(lines):
+    for li, txt in enumerate(_wrap_lines(info.desc, "tiny", w - 20)):
         draw_text(surf, txt, "tiny", TEXT_MID,
                   rect.centerx, desc_y + li * 16, "center")
+
+
+def _overlay_char_text(surf: pygame.Surface, info, max_hp: int, rect: pygame.Rect):
+    """Photo assets replace the whole character card but carry no printed
+    text, so overlay the name/description/HP that a real card would have
+    printed on it, on translucent bands so it stays legible over any art."""
+    from ui_utils import draw_text
+    x, y, w, h = rect
+
+    lines = _wrap_lines(info.desc, "tiny", w - 24)
+    band_h = 24 + len(lines) * 16
+    band = pygame.Rect(x, y + h - band_h, w, band_h)
+    ov = pygame.Surface((band.w, band.h), pygame.SRCALPHA)
+    ov.fill((12, 9, 4, 200))
+    surf.blit(ov, band.topleft)
+    draw_text(surf, info.name_ko, "small", (255, 250, 235),
+              rect.centerx, band.y + 6, "center")
+    for li, txt in enumerate(lines):
+        draw_text(surf, txt, "tiny", (225, 218, 200),
+                  rect.centerx, band.y + 24 + li * 16, "center")
+
+    # HP bullets, top-right corner, on a small dark backing for contrast
+    bw, bh, gap = 8, 20, 3
+    bullets_w = max_hp * (bw + gap) - gap
+    pad = pygame.Rect(x + w - 14 - bullets_w, y + 4, bullets_w + 12, bh + 12)
+    ov2 = pygame.Surface((pad.w, pad.h), pygame.SRCALPHA)
+    ov2.fill((12, 9, 4, 170))
+    surf.blit(ov2, pad.topleft)
+    draw_bullets(surf, max_hp, x + w - 8, y + 10, size=8)
 
 
 # ── GAME CARD (small, in hand) ────────────────────────────────────────────────
