@@ -89,6 +89,11 @@ class PlayedCardPopup:
 
 
 class GameScreen:
+    """The main table view and event-driven controller for an in-progress
+    match: renders every player/hand/equipment from a GameState, routes
+    pygame input events to the right phase handler (play, target pick,
+    response, duel, ...), and drives AI turns through BangAI between
+    frames via update()."""
     RIGHT_X      = 860
     LOG_MAX      = 22
     CARD_SPACING = 90

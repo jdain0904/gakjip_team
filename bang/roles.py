@@ -3,6 +3,7 @@ import random
 
 
 class Role(Enum):
+    """A player's hidden (or, for the Sheriff, public) win-condition team."""
     SHERIFF  = "보안관"
     DEPUTY   = "부관"
     OUTLAW   = "무법자"

@@ -6,6 +6,8 @@ from ui_utils import draw_text, rounded_rect, Button
 
 
 class MenuScreen:
+    """Title screen — lets the player pick 로컬 플레이 (local hot-seat) or
+    AI 대전 (vs AI) before handing off to SetupScreen."""
     def __init__(self, screen: pygame.Surface):
         self.screen = screen
         cx = WIN_W // 2

@@ -6,6 +6,10 @@ from roles import Role
 
 @dataclass
 class Player:
+    """One seat at the table: identity (pid/name/role/character), live state
+    (HP, hand, equipment, jail status) and the character-aware queries
+    (barrel/scope/mustang counts, gun range, hand limit, ...) other game
+    logic needs without knowing each character's special case itself."""
     pid: int
     name: str
     role: Role

@@ -23,6 +23,8 @@ from characters import CharacterType, CharacterInfo, CHARACTERS, assign_characte
 
 
 class Phase(Enum):
+    """Which step of the turn/response cycle `GameState` is currently in —
+    drives both what input is valid right now and what the UI should show."""
     DYNAMITE   = auto()
     JAIL       = auto()
     CHAR_DRAW  = auto()   # Jesse Jones / Pedro Ramirez choose 1st draw source
@@ -38,6 +40,9 @@ class Phase(Enum):
 
 
 class RespType(Enum):
+    """Which kind of attack a Phase.RESPONSE is reacting to — BANG! needs a
+    single Missed! from one target; Indians!/Gatling need every other
+    player to respond (Indians! with BANG!, Gatling with Missed!)."""
     BANG    = "bang"
     INDIANS = "indians"
     GATLING = "gatling"
@@ -45,6 +50,12 @@ class RespType(Enum):
 
 @dataclass
 class GameState:
+    """The whole rule engine for one match. Holds every player, the deck and
+    discard pile, and the current Phase, then exposes the rulebook actions
+    (play_card, respond_with_missed, duel_play_bang, gen_store_pick, ...) as
+    methods that validate the move, mutate this state, and advance the
+    phase — both the GUI (screens/game.py) and the headless AI trainer
+    (train_ai.py) drive a game purely through this one class's API."""
     num_players: int
     human_ids: list[int]
     mode: str            # 'local' | 'ai'

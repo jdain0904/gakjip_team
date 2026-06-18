@@ -4,6 +4,7 @@ import random
 
 
 class Suit(Enum):
+    """One of the four standard playing-card suits a `Card` can have."""
     HEARTS   = "♥"
     DIAMONDS = "♦"
     CLUBS    = "♣"
@@ -11,6 +12,8 @@ class Suit(Enum):
 
 
 class CardType(Enum):
+    """Every distinct card name in the 80-card deck — brown (play-and-discard)
+    or blue (equipment that stays in play; see BLUE_TYPES below)."""
     # Brown – play and discard
     BANG        = "BANG!"
     MISSED      = "Missed!"
@@ -104,6 +107,8 @@ CARD_DESC_KO = {
 
 @dataclass
 class Card:
+    """A single physical playing card: a type (what it does), a suit and
+    a value (used by suit/value-dependent effects like Dynamite or Jail)."""
     card_type: CardType
     suit: Suit
     value: int   # 1=Ace … 13=King

@@ -4,6 +4,8 @@ import random
 
 
 class CharacterType(Enum):
+    """One of the 16 base-game characters; each gives its player a unique
+    passive or active ability (see CHARACTERS below for the description)."""
     BART_CASSIDY   = "bart_cassidy"
     BLACK_JACK     = "black_jack"
     CALAMITY_JANET = "calamity_janet"
@@ -24,6 +26,8 @@ class CharacterType(Enum):
 
 @dataclass(frozen=True)
 class CharacterInfo:
+    """Static rulebook info for one CharacterType: display names, starting
+    HP and the Korean ability description shown on its character card."""
     name_en: str
     name_ko: str
     base_hp: int   # without Sheriff +1 bonus

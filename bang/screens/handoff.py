@@ -8,6 +8,9 @@ from characters import CharacterType, CHARACTERS
 
 
 class HandoffScreen:
+    """Pass-and-play privacy screen: shown right before a local player's
+    turn so only they see their own role/character cards before clicking
+    through to the shared GameScreen."""
     CARD_W = 210
     CARD_H = 296   # ~√2 ratio
 
