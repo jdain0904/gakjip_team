@@ -45,8 +45,12 @@ def _load(rel_path: str) -> pygame.Surface | None:
                 img = pygame.image.load(full).convert_alpha()
                 _img_cache[rel_path] = img
                 return img
-            except Exception:
-                pass
+            except Exception as e:
+                # File exists but pygame couldn't decode it (e.g. SDL_image
+                # build without webp support) — surface this instead of
+                # silently falling back, since that looks identical to
+                # "file not found" otherwise.
+                print(f"[card_renderer] found {full} but failed to load it: {e}")
 
     _img_cache[rel_path] = None
     return None
