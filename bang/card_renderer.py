@@ -6,7 +6,9 @@ Three frame types:
   - Blue: light-blue bg, cornflower border (equipment/blue cards)
 
 Image replacement:
-  Place card images in bang/assets/cards/ — see README.txt for filenames.
+  Place card images in bang/fwd/ — see README.txt for filenames.
+  Supports .webp, .png, .jpg, .jpeg (tried in that order); a flat folder
+  or game/roles/characters subfolders both work.
   When an image exists it is drawn directly (scaled to fit); otherwise the
   programmatic fallback is used.
 """
@@ -19,21 +21,33 @@ from roles import Role
 from characters import CharacterType, CHARACTERS
 
 # ── Asset loading (lazy, cached) ─────────────────────────────────────────────
-_ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets", "cards")
+_ASSET_DIR = os.path.join(os.path.dirname(__file__), "fwd")
+_IMG_EXTS = (".webp", ".png", ".jpg", ".jpeg")
 _img_cache: dict[str, pygame.Surface | None] = {}
 
 def _load(rel_path: str) -> pygame.Surface | None:
-    """Load image relative to assets/cards/; returns None if missing."""
+    """Load image relative to fwd/. Tries .webp/.png/.jpg/.jpeg regardless
+    of the extension given in rel_path, and also falls back to a flat
+    lookup (filename only, ignoring the game/roles/characters subfolder)
+    in case fwd/ isn't split into subfolders. Returns None if no match."""
     if rel_path in _img_cache:
         return _img_cache[rel_path]
-    full = os.path.join(_ASSET_DIR, rel_path)
-    if os.path.exists(full):
-        try:
-            img = pygame.image.load(full).convert_alpha()
-            _img_cache[rel_path] = img
-            return img
-        except Exception:
-            pass
+
+    stem = os.path.splitext(rel_path)[0]
+    base = os.path.basename(stem)
+    candidates = [stem + ext for ext in _IMG_EXTS]
+    candidates += [base + ext for ext in _IMG_EXTS]
+
+    for cand in candidates:
+        full = os.path.join(_ASSET_DIR, cand)
+        if os.path.exists(full):
+            try:
+                img = pygame.image.load(full).convert_alpha()
+                _img_cache[rel_path] = img
+                return img
+            except Exception:
+                pass
+
     _img_cache[rel_path] = None
     return None
 
