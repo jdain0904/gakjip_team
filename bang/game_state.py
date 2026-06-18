@@ -66,6 +66,7 @@ class GameState:
     resp_current: int = -1
     barrel_checked: bool = False
     barrel_saved: bool = False
+    barrel_attempts_left: int = 0
     needs_missed: bool = True
     resp_misses_needed: int = 1    # 2 when attacker is Slab the Killer
     resp_misses_played: int = 0
@@ -215,10 +216,10 @@ class GameState:
         fi = alive.index(from_id)
         ti = alive.index(to_id)
         d  = min((ti - fi) % n, (fi - ti) % n)
-        if self.players[from_id].has_scope():
-            d -= 1
-        if self.players[to_id].has_mustang():
-            d += 1
+        # Rose Doolan/Paul Regret: a real Scope/Mustang stacks with their
+        # innate ability for a total of 2 (see Player.scope_count()).
+        d -= self.players[from_id].scope_count()
+        d += self.players[to_id].mustang_count()
         return max(1, d)
 
     def can_shoot(self, from_id: int, to_id: int) -> bool:
@@ -515,12 +516,9 @@ class GameState:
         if target_id < 0 or not self.players[target_id].alive:
             return False
         target = self.players[target_id]
-        all_c  = target.all_cards()
-        if not all_c:
+        if not target.all_cards():
             return False
-        if target_card_idx < 0 or target_card_idx >= len(all_c):
-            target_card_idx = random.randint(0, len(all_c) - 1)
-        chosen = all_c[target_card_idx]
+        chosen = self._resolve_strip_target(target, target_card_idx)
         self._discard_from_hand(pid, card_idx)
         self._remove_card_from_player(target, chosen)
         self.discard.append(chosen)
@@ -533,26 +531,36 @@ class GameState:
         if self.distance(pid, target_id) != 1:
             return False
         target = self.players[target_id]
-        all_c  = target.all_cards()
-        if not all_c:
+        if not target.all_cards():
             return False
-        if target_card_idx < 0 or target_card_idx >= len(all_c):
-            target_card_idx = random.randint(0, len(all_c) - 1)
-        chosen = all_c[target_card_idx]
+        chosen = self._resolve_strip_target(target, target_card_idx)
         self._discard_from_hand(pid, card_idx)
         self._remove_card_from_player(target, chosen)
         self.players[pid].hand.append(chosen)
         self.log_msg(f"◆ 패닉: {self.players[pid].name} > {target.name} [{chosen.name}] 훔침")
         return True
 
+    def _resolve_strip_target(self, target: Player, target_card_idx: int) -> Card:
+        """Cat Balou/Panic!: an explicit, in-range index picks a chosen
+        in-play (equipped) card. Without one, the rulebook default is a
+        *random* card from the target's hand — never from their equipment,
+        which can only ever be deliberately chosen, not randomly seized."""
+        all_c = target.all_cards()
+        if 0 <= target_card_idx < len(all_c):
+            return all_c[target_card_idx]
+        if target.hand:
+            return random.choice(target.hand)
+        return random.choice(all_c)
+
     def _remove_card_from_player(self, player: Player, card: Card):
-        if card in player.hand:
+        if card == player.jail_card:
+            player.equipment.remove(card)
+            player.jailed    = False
+            player.jail_card = None
+        elif card in player.hand:
             player.hand.remove(card)
         elif card in player.equipment:
             player.equipment.remove(card)
-        elif card == player.jail_card:
-            player.jailed    = False
-            player.jail_card = None
 
     def _play_indians(self, pid, card_idx) -> bool:
         self._discard_from_hand(pid, card_idx)
@@ -655,9 +663,9 @@ class GameState:
         hi, lo = max(idx1, idx2), min(idx1, idx2)
         if hi >= len(p.hand) or lo < 0 or hi == lo:
             return False
-        p.hand.pop(hi)
-        p.hand.pop(lo)
-        self.discard.extend(p.hand[lo:lo])  # already popped
+        c1 = p.hand.pop(hi)
+        c2 = p.hand.pop(lo)
+        self.discard.extend([c1, c2])
         p.heal(1)
         self.log_msg(f"♥ {p.name} 시드 케첨 능력: +1HP ({p.hp}/{p.max_hp})")
         self._check_suzy_lafayette(pid)
@@ -673,6 +681,7 @@ class GameState:
         self.resp_current     = target
         self.barrel_checked   = False
         self.barrel_saved     = False
+        self.barrel_attempts_left = self.players[target].barrel_count()
         self.needs_missed     = True
         # Slab the Killer: target needs 2 Missed!
         self.resp_misses_needed = 2 if self.players[attacker].is_slab_killer() else 1
@@ -696,6 +705,7 @@ class GameState:
                 continue
             self.barrel_checked   = False
             self.barrel_saved     = False
+            self.barrel_attempts_left = p.barrel_count()
             self.needs_missed     = True
             self.resp_misses_played = 0
             self.phase = Phase.RESPONSE
@@ -705,15 +715,22 @@ class GameState:
     def check_barrel(self) -> bool:
         p = self.players[self.resp_current]
         # Official rule: "Neither Missed! nor Barrel have effect" against Indians!
-        if self.resp_type == RespType.INDIANS or not p.has_barrel() or self.barrel_checked:
+        if self.resp_type == RespType.INDIANS or self.barrel_attempts_left <= 0:
             return False
-        self.barrel_checked = True
+        self.barrel_attempts_left -= 1
         flipped = self._flip(self.resp_current)
         saved   = self._is_heart(flipped)
-        self.barrel_saved = saved
+        self.barrel_saved   = saved
+        # Jourdonnais with a *real* Barrel also in play gets two flips
+        # ("two chances to cancel the BANG!") before he must fall back to
+        # Missed!/taking the hit — only lock the button once he's both
+        # failed and is out of attempts, or already succeeded.
+        self.barrel_checked = saved or self.barrel_attempts_left <= 0
         if saved:
             self.needs_missed = False
             self.log_msg(f"○ {p.name} 나무통 발동! ({flipped}) > BANG! 회피")
+        elif self.barrel_attempts_left > 0:
+            self.log_msg(f"▼ {p.name} 나무통 실패 ({flipped}, 하트 아님) > 한 번 더 시도 가능")
         else:
             self.log_msg(f"▼ {p.name} 나무통 실패 ({flipped}, 하트 아님) > 직접 막아야 함")
         return saved
@@ -930,18 +947,25 @@ class GameState:
             self.discard.extend(p.hand)
             self.discard.extend(p.equipment)
 
-        # Sheriff kills Deputy penalty
+        # Sheriff kills Deputy penalty: "must discard all the cards he has
+        # in hand and in play" — discard, not vanish.
         if p.role == Role.DEPUTY and killer_id >= 0:
             if self.players[killer_id].role == Role.SHERIFF:
-                self.players[killer_id].hand.clear()
-                self.players[killer_id].equipment.clear()
-                self.log_msg("▲ 보안관이 부관을 처치 > 패 전부 버림!")
+                sheriff = self.players[killer_id]
+                self.discard.extend(sheriff.hand)
+                self.discard.extend(sheriff.equipment)
+                sheriff.hand.clear()
+                sheriff.equipment.clear()
+                self.log_msg("▲ 보안관이 부관을 처치 > 패/장착 전부 버림!")
 
+        # The jail card (if any) already left via the `p.equipment` extend
+        # above (to the vulture's hand or to discard) — it must NOT be
+        # appended again here, or the same Card object ends up duplicated
+        # into two places at once.
         p.hand.clear()
         p.equipment.clear()
-        if p.jail_card:
-            self.discard.append(p.jail_card)
-            p.jail_card = None
+        p.jailed    = False
+        p.jail_card = None
 
         winner = self._check_win()
         if winner is not None:

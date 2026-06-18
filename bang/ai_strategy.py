@@ -249,11 +249,16 @@ def score_gen_store_card(c, player, counter, w) -> float:
         return w("stagecoach")
     if c.is_gun and c.gun_range > player.gun_range():
         return w("equip_gun")
-    if ct == CardType.BARREL and not player.has_barrel():
+    # Check for a *real* copy specifically, not has_barrel()/has_scope()/
+    # has_mustang() — those also count Jourdonnais/Rose Doolan/Paul Regret's
+    # innate virtual copy, which would wrongly hide the fact that those three
+    # genuinely benefit from picking up a real one too (stacking, see
+    # Player.barrel_count()).
+    if ct == CardType.BARREL and not any(c.card_type == CardType.BARREL for c in player.equipment):
         return w("equip_barrel")
-    if ct == CardType.SCOPE and not player.has_scope():
+    if ct == CardType.SCOPE and not any(c.card_type == CardType.SCOPE for c in player.equipment):
         return w("equip_scope")
-    if ct == CardType.MUSTANG and not player.has_mustang():
+    if ct == CardType.MUSTANG and not any(c.card_type == CardType.MUSTANG for c in player.equipment):
         return w("equip_mustang")
     if ct in (CardType.INDIANS, CardType.GATLING, CardType.DUEL):
         return 3.0

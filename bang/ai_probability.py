@@ -77,10 +77,14 @@ class CardCounter:
         target = self.gs.players[target_pid]
         types = (CardType.MISSED, CardType.BANG) if target.is_calamity_janet() else (CardType.MISSED,)
         p_card = self.prob_has_any_type(len(target.hand), *types)
-        if not target.has_barrel():
+        barrels = target.barrel_count()
+        if barrels <= 0:
             return p_card
         hearts_unseen = self.unseen_matching(lambda c: c.suit == Suit.HEARTS)
-        p_barrel = (hearts_unseen / self.unseen_total) if self.unseen_total > 0 else 0.0
+        p_heart  = (hearts_unseen / self.unseen_total) if self.unseen_total > 0 else 0.0
+        # Jourdonnais with a real Barrel also in play gets two independent
+        # flip attempts (see Player.barrel_count()).
+        p_barrel = 1 - (1 - p_heart) ** barrels
         return p_card + (1 - p_card) * p_barrel
 
     def prob_has_bang_equivalent(self, pid: int) -> float:

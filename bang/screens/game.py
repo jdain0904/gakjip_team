@@ -113,6 +113,14 @@ class GameScreen:
         self.target_candidates: list[int] = []
         self.kit_selected_local: list[int] = []   # which cards picked so far by human
 
+        # Cat Balou/Panic!: once a target with equipment is chosen, pause
+        # here so the human can pick a *specific* in-play card (rulebook:
+        # "choose and discard one card in play") instead of always hitting
+        # whatever happens to sit at index 0.
+        self.strip_mode: bool = False
+        self.strip_card_idx: int = -1
+        self.strip_target_id: int = -1
+
         self._player_positions = _compute_positions(gs.num_players)
 
         self._bg_surf    = _build_bg_surface()
@@ -271,6 +279,10 @@ class GameScreen:
     # ── PLAY ──────────────────────────────────────────────────────────────
     def _handle_play(self, event, pos, pid):
         gs = self.gs
+        if self.strip_mode:
+            self._handle_strip_pick(event, pos, pid)
+            return
+
         if self.btn_endturn.clicked(event, pos):
             self._deselect()
             gs.enter_discard_phase()
@@ -283,7 +295,16 @@ class GameScreen:
         if self.target_mode:
             clicked = self._click_player(pos)
             if clicked is not None and clicked in self.target_candidates:
-                self._exec_with_target(pid, self.selected_card_idx, clicked)
+                card = gs.players[pid].hand[self.selected_card_idx]
+                if (card.card_type in (CardType.CAT_BALOU, CardType.PANIC)
+                        and gs.players[clicked].equipment):
+                    self.strip_card_idx    = self.selected_card_idx
+                    self.strip_target_id   = clicked
+                    self.target_mode       = False
+                    self.target_candidates = []
+                    self.strip_mode        = True
+                else:
+                    self._exec_with_target(pid, self.selected_card_idx, clicked)
             else:
                 self._deselect()
             return
@@ -305,12 +326,24 @@ class GameScreen:
                 gs.play_card(pid, ci)
                 self._on_phase_change()
 
-    def _exec_with_target(self, pid, card_idx, target_id):
+    def _exec_with_target(self, pid, card_idx, target_id, target_card_idx=-1):
         card = self.gs.players[pid].hand[card_idx]
         self._spawn_popup(card, pid, target_id)
-        self.gs.play_card(pid, card_idx, target_id=target_id, target_card_idx=0)
+        self.gs.play_card(pid, card_idx, target_id=target_id, target_card_idx=target_card_idx)
         self._deselect()
         self._on_phase_change()
+
+    # ── Cat Balou/Panic! strip-target picker ────────────────────────────────
+    def _handle_strip_pick(self, event, pos, pid):
+        if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+            return
+        gs     = self.gs
+        target = gs.players[self.strip_target_id]
+        choice = self._click_strip_picker_card(pos, target)
+        if choice is None:
+            return
+        self._exec_with_target(pid, self.strip_card_idx, self.strip_target_id,
+                                target_card_idx=choice)
 
     def _spawn_popup(self, card, actor_pid: int, target_pid: int = -1):
         """Flash a large copy of the card that was just played at screen center."""
@@ -670,6 +703,9 @@ class GameScreen:
         self.selected_card_idx = -1
         self.target_mode       = False
         self.target_candidates = []
+        self.strip_mode        = False
+        self.strip_card_idx    = -1
+        self.strip_target_id   = -1
 
     # ═════════════════════════════════════════════════════════════════════
     # Hit testing
@@ -696,6 +732,26 @@ class GameScreen:
             if pygame.Rect(ox + i * 96, oy, CARD_W, CARD_H).collidepoint(pos):
                 return i
         return -1
+
+    def _click_strip_picker_card(self, pos, target) -> int | None:
+        """Hit-test the Cat Balou/Panic! picker. Returns an `all_cards()`
+        index for an equipment pick, -1 for the "random hand card" slot,
+        or None if the click missed everything (layout mirrors the draw
+        function below — keep both in sync)."""
+        equip       = target.equipment
+        show_random = bool(target.hand)
+        n           = len(equip) + (1 if show_random else 0)
+        cx          = WIN_W // 2
+        ox          = cx - n * 48
+        cy          = WIN_H // 2 - 60
+        for i in range(len(equip)):
+            if pygame.Rect(ox + i * 96, cy, CARD_W, CARD_H).collidepoint(pos):
+                return len(target.hand) + i
+        if show_random:
+            x = ox + len(equip) * 96
+            if pygame.Rect(x, cy, CARD_W, CARD_H).collidepoint(pos):
+                return -1
+        return None
 
     def _click_kit_peek_card(self, pos) -> int:
         pile = self.gs.kit_peek_cards
@@ -726,6 +782,7 @@ class GameScreen:
         self._draw_right_panel()
         self._draw_hand_area()
         self._draw_gen_store_overlay()
+        self._draw_strip_picker_overlay()
         self._draw_kit_peek_overlay()
         self._draw_char_draw_overlay()
         self._draw_phase_banner()
@@ -1212,6 +1269,44 @@ class GameScreen:
             if hover:
                 self._hover_card = card
                 self._hover_card_pos = (ox + i * 96 + CARD_W // 2, cy - 60)
+
+    # ── Cat Balou/Panic! strip-target picker overlay ───────────────────────
+    def _draw_strip_picker_overlay(self):
+        if not self.strip_mode:
+            return
+        gs          = self.gs
+        s           = self.screen
+        target      = gs.players[self.strip_target_id]
+        equip       = target.equipment
+        show_random = bool(target.hand)
+        n           = len(equip) + (1 if show_random else 0)
+        if n == 0:
+            return
+        cx, cy = WIN_W // 2, WIN_H // 2
+        ov = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
+        ov.fill((0, 0, 0, 140))
+        s.blit(ov, (0, 0))
+        pw = n * 96 + 40
+        panel = pygame.Rect(cx - pw // 2, cy - 100, pw, 220)
+        rounded_rect(s, PANEL_BG, panel, 14)
+        pygame.draw.rect(s, GOLD, panel, 2, border_radius=14)
+        draw_text(s, f"{target.name}에게서 빼앗을 카드 선택", "normal", GOLD, cx, cy - 88, "center")
+        ox  = cx - n * 48
+        pos = pygame.mouse.get_pos()
+        for i, card in enumerate(equip):
+            x     = ox + i * 96
+            hover = pygame.Rect(x, cy - 60, CARD_W, CARD_H).collidepoint(pos)
+            self._draw_card(s, card, x, cy - 60, False, hover)
+            if hover:
+                self._hover_card = card
+                self._hover_card_pos = (x + CARD_W // 2, cy - 60)
+        if show_random:
+            x     = ox + len(equip) * 96
+            hover = pygame.Rect(x, cy - 60, CARD_W, CARD_H).collidepoint(pos)
+            draw_game_card(s, None, x, cy - 60, CARD_W, CARD_H, face_down=True)
+            if hover:
+                pygame.draw.rect(s, GOLD, pygame.Rect(x, cy - 60, CARD_W, CARD_H), 3, border_radius=8)
+            draw_text(s, "무작위 패", "small", WHITE, x + CARD_W // 2, cy - 60 + CARD_H + 14, "center")
 
     # ── Kit Carlson peek overlay ───────────────────────────────────────────
     def _draw_kit_peek_overlay(self):

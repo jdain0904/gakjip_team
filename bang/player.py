@@ -25,23 +25,40 @@ class Player:
     jail_card: Optional[Card] = None
 
     # ── Character-aware equipment checks ──────────────────────────────────
-    def has_barrel(self) -> bool:
+    # Jourdonnais/Rose Doolan/Paul Regret each have a virtual copy of their
+    # signature item "in play" at all times; the rulebook explicitly says
+    # that if they *also* equip a real one, both count ("two chances to
+    # cancel the BANG!", "reducing all distances by a total of 2", etc.) —
+    # so these return a count, not just a boolean.
+    def barrel_count(self) -> int:
         from characters import CharacterType
+        n = sum(1 for c in self.equipment if c.card_type == CardType.BARREL)
         if self.character == CharacterType.JOURDONNAIS:
-            return True
-        return any(c.card_type == CardType.BARREL for c in self.equipment)
+            n += 1
+        return n
+
+    def scope_count(self) -> int:
+        from characters import CharacterType
+        n = sum(1 for c in self.equipment if c.card_type == CardType.SCOPE)
+        if self.character == CharacterType.ROSE_DOOLAN:
+            n += 1
+        return n
+
+    def mustang_count(self) -> int:
+        from characters import CharacterType
+        n = sum(1 for c in self.equipment if c.card_type == CardType.MUSTANG)
+        if self.character == CharacterType.PAUL_REGRET:
+            n += 1
+        return n
+
+    def has_barrel(self) -> bool:
+        return self.barrel_count() > 0
 
     def has_scope(self) -> bool:
-        from characters import CharacterType
-        if self.character == CharacterType.ROSE_DOOLAN:
-            return True
-        return any(c.card_type == CardType.SCOPE for c in self.equipment)
+        return self.scope_count() > 0
 
     def has_mustang(self) -> bool:
-        from characters import CharacterType
-        if self.character == CharacterType.PAUL_REGRET:
-            return True
-        return any(c.card_type == CardType.MUSTANG for c in self.equipment)
+        return self.mustang_count() > 0
 
     def has_volcanic(self) -> bool:
         from characters import CharacterType
@@ -113,4 +130,7 @@ class Player:
             self.equipment.remove(card)
 
     def all_cards(self) -> list[Card]:
-        return self.hand + self.equipment + ([self.jail_card] if self.jail_card else [])
+        # The jail card (if any) is already inside `equipment` — it's set
+        # there by equip() at the same time `jail_card` is assigned, so
+        # appending it again here would count the same physical card twice.
+        return self.hand + self.equipment
