@@ -608,6 +608,12 @@ class GameState:
             return False
         if not self.gen_store_order or self.gen_store_order[0] != pid:
             return False
+        if not self.gen_store_pile:
+            # Deck and discard both exhausted mid-deal — nobody left in
+            # gen_store_order can be dealt a card either, so end the round.
+            self.gen_store_order = []
+            self.phase = Phase.PLAY
+            return True
         if card_idx < 0 or card_idx >= len(self.gen_store_pile):
             return False
         card = self.gen_store_pile.pop(card_idx)
@@ -942,15 +948,18 @@ class GameState:
             vulture.hand.extend(p.equipment)
             self.log_msg(f"★ 벌처 샘: {p.name}의 카드 전부 획득")
         else:
-            # Outlaw kill bonus for the killer
-            if p.role == Role.OUTLAW and killer_id >= 0 and self.players[killer_id].alive:
-                for _ in range(3):
-                    c = self._draw()
-                    if c:
-                        self.players[killer_id].hand.append(c)
-                self.log_msg(f"◆ {self.players[killer_id].name} 무법자 처치 보너스 +3장")
             self.discard.extend(p.hand)
             self.discard.extend(p.equipment)
+
+        # Outlaw kill bonus for the killer — independent of Vulture Sam's
+        # ability above: the 3 bonus cards come fresh from the deck, not
+        # from the dead player's hand, so both effects apply together.
+        if p.role == Role.OUTLAW and killer_id >= 0 and self.players[killer_id].alive:
+            for _ in range(3):
+                c = self._draw()
+                if c:
+                    self.players[killer_id].hand.append(c)
+            self.log_msg(f"◆ {self.players[killer_id].name} 무법자 처치 보너스 +3장")
 
         # Sheriff kills Deputy penalty: "must discard all the cards he has
         # in hand and in play" — discard, not vanish.

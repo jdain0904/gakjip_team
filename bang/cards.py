@@ -79,7 +79,7 @@ CARD_NAMES_KO = {
 CARD_DESC_KO = {
     CardType.BANG:        "사거리 내 플레이어 1명 공격",
     CardType.MISSED:      "BANG! 공격 회피 (반응용)",
-    CardType.BEER:        "HP 1 회복 (3명 이하 사용불가)",
+    CardType.BEER:        "HP 1 회복 (2명 이하 사용불가)",
     CardType.STAGECOACH:  "카드 2장 드로우",
     CardType.WELLS_FARGO: "카드 3장 드로우",
     CardType.CAT_BALOU:   "누구의 카드든 1장 버리게 함",

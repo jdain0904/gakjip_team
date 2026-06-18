@@ -113,6 +113,10 @@ class GameScreen:
         self.target_candidates: list[int] = []
         self.kit_selected_local: list[int] = []   # which cards picked so far by human
 
+        # Sid Ketchum: discard 2 cards -> heal 1 HP, usable on his own turn.
+        self.sid_picking: bool = False
+        self.sid_picked: list[int] = []
+
         # Cat Balou/Panic!: once a target with equipment is chosen, pause
         # here so the human can pick a *specific* in-play card (rulebook:
         # "choose and discard one card in play") instead of always hitting
@@ -150,6 +154,8 @@ class GameScreen:
                                   "맞겠습니다", RED, radius=9, fkey="normal")
         self.btn_barrel  = Button((self.RIGHT_X + 5, WIN_H - 105, 185, 44),
                                   "나무통 시도", (110, 76, 28), radius=9, fkey="normal")
+        self.btn_sid     = Button((self.RIGHT_X + 5, WIN_H - 105, 185, 44),
+                                  "카드 2장 > HP+1", (110, 28, 90), radius=9, fkey="normal")
         self.btn_beer    = Button((self.RIGHT_X + 5, WIN_H - 55, 185, 44),
                                   "맥주 사용", GREEN, radius=9, fkey="normal")
         self.btn_die     = Button((self.RIGHT_X + 200, WIN_H - 55, 140, 44),
@@ -277,10 +283,32 @@ class GameScreen:
         return None
 
     # ── PLAY ──────────────────────────────────────────────────────────────
+    def _sid_ketchum_available(self, pid: int) -> bool:
+        p = self.gs.players[pid]
+        return (p.character == CharacterType.SID_KETCHUM
+                and p.hp < p.max_hp and len(p.hand) >= 2)
+
     def _handle_play(self, event, pos, pid):
         gs = self.gs
         if self.strip_mode:
             self._handle_strip_pick(event, pos, pid)
+            return
+
+        if self._sid_ketchum_available(pid) and self.btn_sid.clicked(event, pos):
+            self.sid_picking = not self.sid_picking
+            self.sid_picked  = []
+            return
+
+        if self.sid_picking:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                ci = self._click_hand_card(pos, pid)
+                if ci >= 0 and ci not in self.sid_picked:
+                    self.sid_picked.append(ci)
+                    if len(self.sid_picked) == 2:
+                        gs.use_sid_ketchum(pid, self.sid_picked[0], self.sid_picked[1])
+                        self.sid_picking = False
+                        self.sid_picked  = []
+                        self._on_phase_change()
             return
 
         if self.btn_endturn.clicked(event, pos):
@@ -706,6 +734,8 @@ class GameScreen:
         self.strip_mode        = False
         self.strip_card_idx    = -1
         self.strip_target_id   = -1
+        self.sid_picking       = False
+        self.sid_picked        = []
 
     # ═════════════════════════════════════════════════════════════════════
     # Hit testing
@@ -1199,14 +1229,14 @@ class GameScreen:
 
         pos = pygame.mouse.get_pos()
         for i, card in enumerate(p.hand):
-            is_sel  = (i == self.selected_card_idx)
+            is_sel  = (i == self.selected_card_idx) or (i in self.sid_picked)
             playable = gs.can_play_card(show_pid, i) if gs.phase == Phase.PLAY else False
             is_resp  = self._is_valid_resp_card(show_pid, i)
             is_beer  = (gs.phase == Phase.BEER_SAVE and card.card_type == CardType.BEER)
             hover    = pygame.Rect(hx + i * self.CARD_SPACING, hy, CARD_W, CARD_H).collidepoint(pos)
             lift     = -14 if (is_sel or hover) else 0
             self._draw_card(s, card, hx + i * self.CARD_SPACING, hy + lift,
-                            is_sel, playable or is_resp or is_beer,
+                            is_sel, playable or is_resp or is_beer or self.sid_picking,
                             gs.phase == Phase.DISCARD)
             if hover:
                 self._hover_card = card
@@ -1219,6 +1249,8 @@ class GameScreen:
         if (gs.phase == Phase.RESPONSE and gs.resp_type != RespType.INDIANS
                 and not gs.barrel_checked and p.has_barrel()):
             self.btn_barrel.draw(s, self.btn_barrel.is_hovered(pos))
+        if gs.phase == Phase.PLAY and self._sid_ketchum_available(show_pid):
+            self.btn_sid.draw(s, self.btn_sid.is_hovered(pos))
         if gs.phase == Phase.BEER_SAVE:
             self.btn_beer.draw(s, self.btn_beer.is_hovered(pos))
             self.btn_die.draw(s, self.btn_die.is_hovered(pos))
