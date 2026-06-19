@@ -1,14 +1,14 @@
 """
-Bang! core game logic — full rule implementation.
+Bang! 핵심 게임 로직 — 전체 규칙 구현.
 
-Turn flow:
+턴 흐름:
   DYNAMITE → JAIL → CHAR_DRAW/KIT_PEEK → DRAW → PLAY
-  → RESPONSE/DUEL/GEN_STORE → DISCARD → (next turn)
+  → RESPONSE/DUEL/GEN_STORE → DISCARD → (다음 턴)
 
-Special phases:
-  BEER_SAVE  – player can play Beer immediately before dying
-  CHAR_DRAW  – Jesse Jones / Pedro Ramirez first-card choice
-  KIT_PEEK   – Kit Carlson picks 2 of top 3
+특수 단계:
+  BEER_SAVE  – 사망 직전 플레이어가 즉시 맥주를 사용할 수 있는 단계
+  CHAR_DRAW  – 제시 존스 / 페드로 라미레즈의 첫 번째 카드 선택
+  KIT_PEEK   – 킷 칼슨이 상위 3장 중 2장을 선택
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -27,15 +27,15 @@ class Phase(Enum):
     지금 어떤 입력이 유효한지와 UI가 무엇을 보여줘야 하는지를 결정한다."""
     DYNAMITE   = auto()
     JAIL       = auto()
-    CHAR_DRAW  = auto()   # Jesse Jones / Pedro Ramirez choose 1st draw source
-    KIT_PEEK   = auto()   # Kit Carlson picks 2 of top 3
+    CHAR_DRAW  = auto()   # 제시 존스 / 페드로 라미레즈가 첫 드로우 방식을 선택
+    KIT_PEEK   = auto()   # 킷 칼슨이 상위 3장 중 2장을 선택
     DRAW       = auto()
     PLAY       = auto()
-    RESPONSE   = auto()   # BANG / INDIANS / GATLING response
+    RESPONSE   = auto()   # BANG / 인디언! / 개틀링 반응
     DUEL       = auto()
     GEN_STORE  = auto()
     DISCARD    = auto()
-    BEER_SAVE  = auto()   # lethal-hit Beer rescue
+    BEER_SAVE  = auto()   # 치명타 직전 맥주로 구사일생
     GAME_OVER  = auto()
 
 
@@ -58,7 +58,7 @@ class GameState:
     API만으로 게임을 진행시킨다."""
     num_players: int
     human_ids: list[int]
-    mode: str            # 'local' | 'ai'
+    mode: str            # 'local'(로컬 플레이) | 'ai'(AI 대전)
 
     players: list[Player] = field(default_factory=list)
     deck: list[Card]     = field(default_factory=list)
@@ -70,7 +70,7 @@ class GameState:
     turn_num: int = 0
     bang_used: bool = False
 
-    # ── Response context ───────────────────────────────────────────────────
+    # ── 반응(Response) 컨텍스트 ─────────────────────────────────────────────
     resp_type: Optional[RespType] = None
     resp_attacker: int = -1
     resp_targets: list[int] = field(default_factory=list)
@@ -79,37 +79,37 @@ class GameState:
     barrel_saved: bool = False
     barrel_attempts_left: int = 0
     needs_missed: bool = True
-    resp_misses_needed: int = 1    # 2 when attacker is Slab the Killer
+    resp_misses_needed: int = 1    # 공격자가 슬랩 더 킬러면 2
     resp_misses_played: int = 0
 
-    # ── Duel context ───────────────────────────────────────────────────────
+    # ── 결투(Duel) 컨텍스트 ─────────────────────────────────────────────────
     duel_challenger: int = -1
     duel_other: int = -1
     duel_current: int = -1
 
-    # ── General Store ──────────────────────────────────────────────────────
+    # ── 잡화점(General Store) ───────────────────────────────────────────────
     gen_store_order: list[int] = field(default_factory=list)
 
-    # ── Beer lethal-hit rescue ─────────────────────────────────────────────
+    # ── 맥주를 이용한 치명타 구사일생 ─────────────────────────────────────────
     beer_save_pid: int = -1
     beer_save_killer: int = -1
     beer_save_resume: str = ""  # 'response', 'duel', 'dynamite', 'generic'
 
-    # ── Character-specific draw (Jesse Jones / Pedro Ramirez) ──────────────
+    # ── 캐릭터별 드로우 (제시 존스 / 페드로 라미레즈) ─────────────────────────
     char_draw_pid: int = -1
     char_draw_type: str = ""      # 'jesse' | 'pedro'
-    char_draw_first_done: bool = False  # True after 1st card drawn
+    char_draw_first_done: bool = False  # 첫 카드를 뽑은 후 True
 
-    # ── Kit Carlson peek ──────────────────────────────────────────────────
+    # ── 킷 칼슨 미리보기 ────────────────────────────────────────────────────
     kit_peek_cards: list[Card] = field(default_factory=list)
-    kit_selected: list[int] = field(default_factory=list)   # indices in kit_peek_cards
+    kit_selected: list[int] = field(default_factory=list)   # kit_peek_cards 내 인덱스
 
-    # ── Outcome ───────────────────────────────────────────────────────────
+    # ── 결과 ────────────────────────────────────────────────────────────────
     winner_role: Optional[Role] = None
     log: list[str] = field(default_factory=list)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Factory
+    # 팩토리
     # ═════════════════════════════════════════════════════════════════════
     @classmethod
     def new_game(cls, num_players: int, human_ids: list[int], mode: str,
@@ -137,15 +137,15 @@ class GameState:
         gs = cls(num_players=num_players, human_ids=human_ids, mode=mode)
         gs.players  = players
         gs.deck     = deck
-        # Official rule: the Sheriff always takes the first turn. Roles are
-        # now assigned to a random seat, so find wherever Sheriff landed
-        # instead of assuming it's seat 0.
+        # 공식 규칙: 보안관이 항상 첫 턴을 가져간다. 역할이 무작위 자리에
+        # 배정되므로, 0번 자리라고 가정하지 않고 보안관이 어느 자리에
+        # 배정되었는지 직접 찾는다.
         gs.current_pid = next(p.pid for p in players if p.role == Role.SHERIFF)
         gs._enter_turn_start()
         return gs
 
     # ═════════════════════════════════════════════════════════════════════
-    # Deck helpers
+    # 덱 보조 함수
     # ═════════════════════════════════════════════════════════════════════
     def _draw(self) -> Optional[Card]:
         if not self.deck:
@@ -160,9 +160,9 @@ class GameState:
 
     def _flip(self, pid: int = -1) -> Optional[Card]:
         """
-        Flip top card for draw! checks (barrel, jail, dynamite).
-        Lucky Duke flips 2 and the caller picks the better one.
-        Returns the card that 'counts' for the check.
+        드로우! 판정(나무통, 감옥, 다이너마이트)을 위해 덱 맨 위 카드를 뒤집는다.
+        럭키 듀크는 카드 2장을 뒤집어 더 유리한 쪽을 선택한다.
+        판정에 '적용되는' 카드를 반환한다.
         """
         c1 = self._flip_single()
         if pid >= 0 and self.players[pid].is_lucky_duke():
@@ -171,7 +171,7 @@ class GameState:
                 chosen = self._lucky_duke_pick(c1, c2)
                 other  = c2 if chosen is c1 else c1
                 self.log_msg(f"★ 럭키 듀크: {c1} | {c2} > {chosen} 선택")
-                # Put the unchosen in discard (already there via _flip_single)
+                # 선택되지 않은 카드는 버림 더미에 둔다 (_flip_single에서 이미 처리됨)
                 return chosen
         return c1
 
@@ -183,12 +183,12 @@ class GameState:
 
     @staticmethod
     def _lucky_duke_pick(c1: Optional[Card], c2: Optional[Card]) -> Optional[Card]:
-        """Pick the 'better' card for Lucky Duke — context-agnostic, prefer Heart."""
+        """럭키 듀크를 위해 '더 나은' 카드를 고른다 — 상황에 무관하게 하트를 우선한다."""
         if c1 is None:
             return c2
         if c2 is None:
             return c1
-        # Prefer Heart (good for barrel/jail), avoid 2-9♠ (bad for dynamite)
+        # 하트를 우선(나무통/감옥에 유리), 2-9♠는 피함(다이너마이트에 불리)
         def score(c: Card) -> int:
             if c.suit == Suit.HEARTS:
                 return 2
@@ -206,7 +206,7 @@ class GameState:
         return c is not None and c.suit == Suit.SPADES and 2 <= c.value <= 9
 
     # ═════════════════════════════════════════════════════════════════════
-    # Logging
+    # 로그
     # ═════════════════════════════════════════════════════════════════════
     def log_msg(self, msg: str):
         self.log.append(msg)
@@ -214,7 +214,7 @@ class GameState:
             self.log.pop(0)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Distance / targeting
+    # 거리 / 대상 선택
     # ═════════════════════════════════════════════════════════════════════
     def _alive_ids(self) -> list[int]:
         return [p.pid for p in self.players if p.alive]
@@ -227,8 +227,8 @@ class GameState:
         fi = alive.index(from_id)
         ti = alive.index(to_id)
         d  = min((ti - fi) % n, (fi - ti) % n)
-        # Rose Doolan/Paul Regret: a real Scope/Mustang stacks with their
-        # innate ability for a total of 2 (see Player.scope_count()).
+        # 로즈 둘란/폴 리그렛: 실제 조준경/무스탕 카드는 고유 능력과 중첩되어
+        # 총합 2가 된다 (Player.scope_count() 참고).
         d -= self.players[from_id].scope_count()
         d += self.players[to_id].mustang_count()
         return max(1, d)
@@ -250,7 +250,7 @@ class GameState:
                 and not self.players[i].jailed]
 
     # ═════════════════════════════════════════════════════════════════════
-    # Turn flow
+    # 턴 흐름
     # ═════════════════════════════════════════════════════════════════════
     def _enter_turn_start(self):
         p = self.players[self.current_pid]
@@ -274,7 +274,7 @@ class GameState:
         else:
             self.phase = Phase.DRAW
 
-    # ── Dynamite ──────────────────────────────────────────────────────────
+    # ── 다이너마이트 ──────────────────────────────────────────────────────────
     def resolve_dynamite(self) -> dict:
         p       = self.players[self.current_pid]
         dyn     = p.get_dynamite()
@@ -304,7 +304,7 @@ class GameState:
             self._enter_draw_phase()
         return {"flipped": flipped, "exploded": exploded}
 
-    # ── Jail ──────────────────────────────────────────────────────────────
+    # ── 감옥 ──────────────────────────────────────────────────────────────
     def resolve_jail(self) -> dict:
         p       = self.players[self.current_pid]
         flipped = self._flip(self.current_pid)
@@ -323,7 +323,7 @@ class GameState:
             self._advance_turn()
         return {"flipped": flipped, "escaped": escaped}
 
-    # ── Character special draw ─────────────────────────────────────────────
+    # ── 캐릭터 특수 드로우 ─────────────────────────────────────────────────
     def _start_kit_peek(self):
         self.kit_peek_cards = []
         self.kit_selected   = []
@@ -332,7 +332,7 @@ class GameState:
             if c:
                 self.kit_peek_cards.append(c)
         if not self.kit_peek_cards:
-            # Deck and discard both exhausted — nothing to peek at, skip straight to PLAY.
+            # 덱과 버림 더미가 모두 소진됨 — 공개할 카드가 없으므로 PLAY 단계로 바로 넘어간다.
             self.bang_used = False
             self.phase = Phase.PLAY
             return
@@ -352,16 +352,16 @@ class GameState:
             leftover = [c for i, c in enumerate(self.kit_peek_cards)
                         if i not in self.kit_selected]
             if leftover:
-                self.deck.append(leftover[0])   # put back on top
+                self.deck.append(leftover[0])   # 덱 맨 위로 되돌림
             self.kit_peek_cards = []
             self.kit_selected   = []
             self.bang_used = False
             self.phase = Phase.PLAY
         return True
 
-    # Jesse Jones / Pedro Ramirez
+    # 제시 존스 / 페드로 라미레즈
     def char_draw_from_deck(self) -> bool:
-        """Draw 1st card from deck (Jesse Jones / Pedro Ramirez option)."""
+        """덱에서 첫 번째 카드를 뽑는다 (제시 존스 / 페드로 라미레즈 선택지)."""
         if self.phase != Phase.CHAR_DRAW or self.char_draw_first_done:
             return False
         c = self._draw()
@@ -372,7 +372,7 @@ class GameState:
         return True
 
     def char_draw_from_player(self, target_pid: int) -> bool:
-        """Jesse Jones: steal first card from target's hand."""
+        """제시 존스: 대상의 손패에서 첫 번째 카드를 훔쳐온다."""
         if self.phase != Phase.CHAR_DRAW or self.char_draw_type != "jesse":
             return False
         if self.char_draw_first_done:
@@ -389,7 +389,7 @@ class GameState:
         return True
 
     def char_draw_from_discard(self) -> bool:
-        """Pedro Ramirez: draw first card from discard pile."""
+        """페드로 라미레즈: 버림 더미에서 첫 번째 카드를 뽑는다."""
         if self.phase != Phase.CHAR_DRAW or self.char_draw_type != "pedro":
             return False
         if self.char_draw_first_done:
@@ -404,7 +404,7 @@ class GameState:
         return True
 
     def _finish_char_draw(self):
-        """Draw 2nd card from deck and start play phase."""
+        """덱에서 두 번째 카드를 뽑고 플레이 단계를 시작한다."""
         c = self._draw()
         if c:
             self.players[self.char_draw_pid].hand.append(c)
@@ -414,12 +414,12 @@ class GameState:
         self.bang_used = False
         self.phase = Phase.PLAY
 
-    # ── Normal draw ───────────────────────────────────────────────────────
+    # ── 일반 드로우 ───────────────────────────────────────────────────────
     def do_draw(self):
         p  = self.players[self.current_pid]
         ct = p.character
 
-        # Black Jack: reveal 2nd card; if red suit draw an extra card
+        # 블랙 잭: 두 번째 카드를 공개; 빨간 무늬면 카드 1장 추가로 드로우
         if ct == CharacterType.BLACK_JACK:
             c1 = self._draw()
             c2 = self._draw()
@@ -443,7 +443,7 @@ class GameState:
         self.phase = Phase.PLAY
 
     # ═════════════════════════════════════════════════════════════════════
-    # Playing cards (PLAY phase)
+    # 카드 플레이 (PLAY 단계)
     # ═════════════════════════════════════════════════════════════════════
     def play_card(self, pid: int, card_idx: int, target_id: int = -1,
                   target_card_idx: int = -1) -> bool:
@@ -453,7 +453,7 @@ class GameState:
         card = p.hand[card_idx]
         ct   = card.card_type
 
-        # Calamity Janet: Missed! can be used as BANG!
+        # 캘러미티 재닛: Missed!를 BANG!으로 사용 가능
         if ct == CardType.MISSED and p.is_calamity_janet():
             return self._play_bang(pid, card_idx, target_id, as_missed=True)
 
@@ -557,10 +557,11 @@ class GameState:
         return True
 
     def _resolve_strip_target(self, target: Player, target_card_idx: int) -> Card:
-        """Cat Balou/Panic!: an explicit, in-range index picks a chosen
-        in-play (equipped) card. Without one, the rulebook default is a
-        *random* card from the target's hand — never from their equipment,
-        which can only ever be deliberately chosen, not randomly seized."""
+        """캣 발루/패닉!: 유효 범위 내의 명시적 인덱스가 주어지면 대상이
+        장착한(플레이 중인) 카드 중 하나를 선택한다. 인덱스가 없으면
+        규칙서 기본값에 따라 대상의 손패에서 *무작위로* 카드를 가져온다 —
+        장착 카드는 의도적으로 선택할 때만 빼앗을 수 있고, 무작위로
+        빼앗기는 대상이 될 수 없다."""
         all_c = target.all_cards()
         if 0 <= target_card_idx < len(all_c):
             return all_c[target_card_idx]
@@ -620,8 +621,8 @@ class GameState:
         if not self.gen_store_order or self.gen_store_order[0] != pid:
             return False
         if not self.gen_store_pile:
-            # Deck and discard both exhausted mid-deal — nobody left in
-            # gen_store_order can be dealt a card either, so end the round.
+            # 분배 중 덱과 버림 더미가 모두 소진됨 — gen_store_order에 남은
+            # 누구에게도 더는 카드를 나눠줄 수 없으므로 라운드를 종료한다.
             self.gen_store_order = []
             self.phase = Phase.PLAY
             return True
@@ -671,9 +672,9 @@ class GameState:
             self.log_msg(f"● {p.name} [{card.name}] 장착")
         return True
 
-    # ── Sid Ketchum active ability ─────────────────────────────────────────
+    # ── 시드 케첨 액티브 능력 ─────────────────────────────────────────────
     def use_sid_ketchum(self, pid: int, idx1: int, idx2: int) -> bool:
-        """Discard 2 cards to gain 1 HP. Valid only during own PLAY phase."""
+        """카드 2장을 버려 HP 1을 회복한다. 자신의 PLAY 단계에서만 유효하다."""
         from characters import CharacterType as CT
         p = self.players[pid]
         if p.character != CT.SID_KETCHUM:
@@ -694,7 +695,7 @@ class GameState:
         return True
 
     # ═════════════════════════════════════════════════════════════════════
-    # Response system
+    # 반응 시스템
     # ═════════════════════════════════════════════════════════════════════
     def _start_bang_response(self, attacker: int, target: int):
         self.resp_type        = RespType.BANG
@@ -705,7 +706,7 @@ class GameState:
         self.barrel_saved     = False
         self.barrel_attempts_left = self.players[target].barrel_count()
         self.needs_missed     = True
-        # Slab the Killer: target needs 2 Missed!
+        # 슬랩 더 킬러: 대상은 Missed! 2장이 필요함
         self.resp_misses_needed = 2 if self.players[attacker].is_slab_killer() else 1
         self.resp_misses_played = 0
         self.phase = Phase.RESPONSE
@@ -736,17 +737,17 @@ class GameState:
 
     def check_barrel(self) -> bool:
         p = self.players[self.resp_current]
-        # Official rule: "Neither Missed! nor Barrel have effect" against Indians!
+        # 공식 규칙: 인디언!에 대해서는 "Missed!도 나무통도 효과가 없다"
         if self.resp_type == RespType.INDIANS or self.barrel_attempts_left <= 0:
             return False
         self.barrel_attempts_left -= 1
         flipped = self._flip(self.resp_current)
         saved   = self._is_heart(flipped)
         self.barrel_saved   = saved
-        # Jourdonnais with a *real* Barrel also in play gets two flips
-        # ("two chances to cancel the BANG!") before he must fall back to
-        # Missed!/taking the hit — only lock the button once he's both
-        # failed and is out of attempts, or already succeeded.
+        # 주르도네가 *실제* 나무통도 함께 장착하고 있으면 Missed!를 내거나
+        # 피격을 감수하기 전에 두 번 뒤집을 수 있다 ("BANG!을 무효화할
+        # 두 번의 기회") — 실패하고 시도 횟수도 남지 않았을 때, 또는
+        # 이미 성공했을 때만 버튼을 잠근다.
         self.barrel_checked = saved or self.barrel_attempts_left <= 0
         if saved:
             self.needs_missed = False
@@ -764,7 +765,7 @@ class GameState:
             return False
         card = p.hand[card_idx]
 
-        # Valid response cards depend on resp_type and Calamity Janet
+        # 유효한 반응 카드는 resp_type과 캘러미티 재닛 여부에 따라 달라짐
         need_bang   = self.resp_type == RespType.INDIANS
         janet       = p.is_calamity_janet()
         valid_bang  = card.card_type == CardType.BANG or (janet and card.card_type == CardType.MISSED)
@@ -783,7 +784,7 @@ class GameState:
 
         if self.resp_misses_played >= self.resp_misses_needed:
             self._finish_response(hit=False)
-        # else: need more Missed! (Slab the Killer) — stay in RESPONSE phase
+        # else: Missed!가 더 필요함 (슬랩 더 킬러) — RESPONSE 단계 유지
         return True
 
     def respond_take_hit(self):
@@ -807,7 +808,7 @@ class GameState:
             self._next_responder()
 
     # ═════════════════════════════════════════════════════════════════════
-    # Duel
+    # 결투
     # ═════════════════════════════════════════════════════════════════════
     def duel_play_bang(self, card_idx: int) -> bool:
         pid  = self.duel_current
@@ -842,12 +843,12 @@ class GameState:
             self.phase = Phase.PLAY
 
     # ═════════════════════════════════════════════════════════════════════
-    # Beer lethal-hit rescue
+    # 맥주를 이용한 치명타 구사일생
     # ═════════════════════════════════════════════════════════════════════
     def _handle_death(self, pid: int, killer_id: int, resume: str):
-        """Check Beer save before eliminating."""
+        """탈락 처리 전에 맥주로 구사일생할 수 있는지 확인한다."""
         p = self.players[pid]
-        alive_count = len(self._alive_ids())  # pid still counts as alive here
+        alive_count = len(self._alive_ids())  # 이 시점에는 pid도 생존자로 집계됨
         has_beer = any(c.card_type == CardType.BEER for c in p.hand)
         if has_beer and alive_count > 2:
             self.beer_save_pid    = pid
@@ -907,13 +908,13 @@ class GameState:
             self.phase = Phase.PLAY
 
     # ═════════════════════════════════════════════════════════════════════
-    # Character-triggered reactions
+    # 캐릭터 발동 반응
     # ═════════════════════════════════════════════════════════════════════
     def _trigger_damage_reactions(self, pid: int, attacker_id: int, amount: int):
         p  = self.players[pid]
         ct = p.character
 
-        # Bart Cassidy: draw card per HP lost
+        # 바트 카시디: 잃은 HP당 카드 1장 드로우
         if ct == CharacterType.BART_CASSIDY and p.alive:
             for _ in range(amount):
                 c = self._draw()
@@ -921,7 +922,7 @@ class GameState:
                     p.hand.append(c)
             self.log_msg(f"★ 바트 카시디: +{amount}장 드로우")
 
-        # El Gringo: steal 1 card per HP lost from attacker
+        # 엘 그링고: 잃은 HP당 공격자에게서 카드 1장 훔침
         if ct == CharacterType.EL_GRINGO and p.alive and attacker_id >= 0:
             attacker = self.players[attacker_id]
             if attacker.hand:
@@ -942,7 +943,7 @@ class GameState:
                 self.log_msg(f"★ 수지 라파예트: 손패 없음 > 카드 1장 드로우 [{c.name}]")
 
     # ═════════════════════════════════════════════════════════════════════
-    # Elimination & win
+    # 탈락 & 승리 판정
     # ═════════════════════════════════════════════════════════════════════
     def _eliminate(self, pid: int, killer_id: int):
         p       = self.players[pid]
@@ -950,7 +951,7 @@ class GameState:
         p.role_revealed = True
         self.log_msg(f"▼ {p.name} 탈락! 역할: {p.role.value}")
 
-        # Vulture Sam: gets ALL cards from eliminated player
+        # 벌처 샘: 탈락한 플레이어의 모든 카드를 가져감
         vulture = next((pl for pl in self.players
                         if pl.alive and pl.character == CharacterType.VULTURE_SAM
                         and pl.pid != pid), None)
@@ -962,9 +963,9 @@ class GameState:
             self.discard.extend(p.hand)
             self.discard.extend(p.equipment)
 
-        # Outlaw kill bonus for the killer — independent of Vulture Sam's
-        # ability above: the 3 bonus cards come fresh from the deck, not
-        # from the dead player's hand, so both effects apply together.
+        # 처치자에게 주어지는 무법자 처치 보너스 — 위의 벌처 샘 능력과는
+        # 독립적이다: 보너스 카드 3장은 죽은 플레이어의 손패가 아니라 덱에서
+        # 새로 뽑으므로, 두 효과는 함께 적용된다.
         if p.role == Role.OUTLAW and killer_id >= 0 and self.players[killer_id].alive:
             for _ in range(3):
                 c = self._draw()
@@ -972,8 +973,8 @@ class GameState:
                     self.players[killer_id].hand.append(c)
             self.log_msg(f"◆ {self.players[killer_id].name} 무법자 처치 보너스 +3장")
 
-        # Sheriff kills Deputy penalty: "must discard all the cards he has
-        # in hand and in play" — discard, not vanish.
+        # 보안관이 부관을 처치했을 때의 페널티: "손패와 플레이 중인 카드를
+        # 모두 버려야 한다" — 그냥 사라지는 것이 아니라 버림 더미로 간다.
         if p.role == Role.DEPUTY and killer_id >= 0:
             if self.players[killer_id].role == Role.SHERIFF:
                 sheriff = self.players[killer_id]
@@ -983,10 +984,9 @@ class GameState:
                 sheriff.equipment.clear()
                 self.log_msg("▲ 보안관이 부관을 처치 > 패/장착 전부 버림!")
 
-        # The jail card (if any) already left via the `p.equipment` extend
-        # above (to the vulture's hand or to discard) — it must NOT be
-        # appended again here, or the same Card object ends up duplicated
-        # into two places at once.
+        # 감옥 카드(있는 경우)는 위의 `p.equipment` 확장을 통해 이미
+        # (벌처의 손패 또는 버림 더미로) 처리되었다 — 여기서 다시 추가하면
+        # 동일한 Card 객체가 동시에 두 곳에 중복으로 들어가게 된다.
         p.hand.clear()
         p.equipment.clear()
         p.jailed    = False
@@ -1012,7 +1012,7 @@ class GameState:
         return None
 
     # ═════════════════════════════════════════════════════════════════════
-    # End-of-turn discard
+    # 턴 종료 버리기
     # ═════════════════════════════════════════════════════════════════════
     def enter_discard_phase(self):
         p = self.players[self.current_pid]
@@ -1033,7 +1033,7 @@ class GameState:
         return True
 
     # ═════════════════════════════════════════════════════════════════════
-    # Turn advance
+    # 턴 진행
     # ═════════════════════════════════════════════════════════════════════
     def _next_alive(self, from_pid: int) -> int:
         alive = self._alive_ids()
@@ -1048,7 +1048,7 @@ class GameState:
         self._enter_turn_start()
 
     # ═════════════════════════════════════════════════════════════════════
-    # Convenience queries
+    # 편의 조회 함수
     # ═════════════════════════════════════════════════════════════════════
     def current_player(self) -> Player:
         return self.players[self.current_pid]
@@ -1062,7 +1062,7 @@ class GameState:
 
     def valid_targets_for_card(self, pid: int, card: Card) -> list[int]:
         ct = card.card_type
-        # Calamity Janet uses Missed! as BANG!
+        # 캘러미티 재닛은 Missed!를 BANG!으로 사용
         if ct == CardType.MISSED and self.players[pid].is_calamity_janet():
             ct = CardType.BANG
         if ct == CardType.BANG:
@@ -1085,7 +1085,7 @@ class GameState:
         card = p.hand[card_idx]
         ct   = card.card_type
 
-        # Calamity Janet can use Missed! as BANG!
+        # 캘러미티 재닛은 Missed!를 BANG!으로 사용 가능
         if ct == CardType.MISSED and p.is_calamity_janet():
             if p.has_volcanic() or not self.bang_used:
                 return bool(self.valid_bang_targets(pid))
@@ -1114,7 +1114,7 @@ class GameState:
         return True
 
     def player_won(self, pid: int) -> bool:
-        """True if `pid`'s role ended up on the winning side (Deputy counts as a Sheriff win)."""
+        """`pid`의 역할이 승리한 진영에 속하면 True를 반환한다 (부관은 보안관 승리로 집계된다)."""
         if self.winner_role is None:
             return False
         role = self.players[pid].role
