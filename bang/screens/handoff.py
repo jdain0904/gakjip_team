@@ -8,9 +8,9 @@ from characters import CharacterType, CHARACTERS
 
 
 class HandoffScreen:
-    """Pass-and-play privacy screen: shown right before a local player's
-    turn so only they see their own role/character cards before clicking
-    through to the shared GameScreen."""
+    """돌려가며 플레이할 때의 정보 보호 화면: 로컬 플레이어의 턴이 시작되기
+    직전에 띄워서, 본인만 자신의 역할/캐릭터 카드를 확인한 뒤 클릭해서
+    공용 GameScreen으로 넘어가게 한다."""
     CARD_W = 210
     CARD_H = 296   # ~√2 ratio
 

@@ -27,8 +27,8 @@ DIFFICULTY_COLORS = [
 
 
 class SetupScreen:
-    """Pre-game configuration screen: player count, human/AI assignment
-    and AI difficulty, then builds the dict GameState.new_game() needs."""
+    """게임 시작 전 설정 화면: 플레이어 수, 사람/AI 배정, AI 난이도를
+    정한 뒤 GameState.new_game()에 필요한 dict를 만들어 반환한다."""
     def __init__(self, screen: pygame.Surface, mode: str):
         self.screen = screen
         self.mode   = mode      # 'local' | 'ai'

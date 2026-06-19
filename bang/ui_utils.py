@@ -121,9 +121,9 @@ def radial_vignette(w: int, h: int, max_alpha: int = 130, steps: int = 28) -> py
 
 
 class Button:
-    """A clickable rounded rectangle with a label — every screen's mouse
-    interaction (menu choices, play/end-turn, target picks, ...) is built
-    from these; draw() renders it and clicked() reports a left-click hit."""
+    """라벨이 있는 클릭 가능한 둥근 사각형 — 모든 화면의 마우스 상호작용
+    (메뉴 선택, 플레이/턴 종료, 대상 선택 등)이 이 클래스로 만들어진다;
+    draw()는 그리기를, clicked()는 좌클릭 히트 판정을 담당한다."""
     def __init__(self, rect, label, color=None, radius=9, fkey="small",
                  text_color=None):
         from constants import ACCENT

@@ -34,12 +34,13 @@ def _hypergeom_at_least_one(pool: int, hits: int, draw: int) -> float:
 
 
 class CardCounter:
-    """Tracks every card visible to `viewer_pid` and infers odds for the rest.
+    """`viewer_pid`에게 보이는 모든 카드를 추적하고, 나머지 카드들의 확률을
+    추론한다.
 
-    "Visible" means: the discard pile, all equipment on the table (public
-    by the rules), the General Store row when it's face-up, and the
-    viewer's own hand. Other players' hands are never inspected — the AI
-    only ever reasons about them probabilistically.
+    "보이는 카드"란 버림 더미, 테이블에 깔린 모든 장비(규칙상 공개 정보),
+    공개된 잡화점 카드, 그리고 viewer 자신의 손패를 의미한다. 다른
+    플레이어의 손패는 절대 들여다보지 않으며, AI는 항상 확률적으로만
+    추론한다.
     """
 
     def __init__(self, gs, viewer_pid: int):

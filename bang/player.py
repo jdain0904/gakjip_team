@@ -6,10 +6,10 @@ from roles import Role
 
 @dataclass
 class Player:
-    """One seat at the table: identity (pid/name/role/character), live state
-    (HP, hand, equipment, jail status) and the character-aware queries
-    (barrel/scope/mustang counts, gun range, hand limit, ...) other game
-    logic needs without knowing each character's special case itself."""
+    """테이블의 한 자리를 나타낸다: 신원 정보(pid/이름/역할/캐릭터), 현재
+    상태(체력, 손패, 장비, 감옥 상태)와, 다른 게임 로직이 각 캐릭터의 특수
+    상황을 직접 알 필요 없이 사용할 수 있는 캐릭터 인지 조회 메서드(나무통/
+    조준경/무스탕 개수, 사거리, 손패 제한 등)를 함께 가진다."""
     pid: int
     name: str
     role: Role

@@ -6,8 +6,8 @@ from ui_utils import draw_text, rounded_rect, Button
 
 
 class MenuScreen:
-    """Title screen — lets the player pick 로컬 플레이 (local hot-seat) or
-    AI 대전 (vs AI) before handing off to SetupScreen."""
+    """타이틀 화면 — 플레이어가 로컬 플레이(한 화면 돌려쓰기) 또는 AI 대전
+    중 하나를 선택하면 SetupScreen으로 넘어간다."""
     def __init__(self, screen: pygame.Surface):
         self.screen = screen
         cx = WIN_W // 2

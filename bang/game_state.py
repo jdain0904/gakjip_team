@@ -23,8 +23,8 @@ from characters import CharacterType, CharacterInfo, CHARACTERS, assign_characte
 
 
 class Phase(Enum):
-    """Which step of the turn/response cycle `GameState` is currently in —
-    drives both what input is valid right now and what the UI should show."""
+    """`GameState`가 현재 턴/반응 흐름의 어느 단계에 있는지를 나타낸다 —
+    지금 어떤 입력이 유효한지와 UI가 무엇을 보여줘야 하는지를 결정한다."""
     DYNAMITE   = auto()
     JAIL       = auto()
     CHAR_DRAW  = auto()   # Jesse Jones / Pedro Ramirez choose 1st draw source
@@ -40,9 +40,9 @@ class Phase(Enum):
 
 
 class RespType(Enum):
-    """Which kind of attack a Phase.RESPONSE is reacting to — BANG! needs a
-    single Missed! from one target; Indians!/Gatling need every other
-    player to respond (Indians! with BANG!, Gatling with Missed!)."""
+    """Phase.RESPONSE가 어떤 공격에 반응하고 있는지를 나타낸다 — BANG!은
+    대상 1명의 Missed! 한 장이 필요하고, 인디언!/개틀링은 나머지 전원이
+    반응해야 한다 (인디언!은 BANG!으로, 개틀링은 Missed!로)."""
     BANG    = "bang"
     INDIANS = "indians"
     GATLING = "gatling"
@@ -50,12 +50,12 @@ class RespType(Enum):
 
 @dataclass
 class GameState:
-    """The whole rule engine for one match. Holds every player, the deck and
-    discard pile, and the current Phase, then exposes the rulebook actions
-    (play_card, respond_with_missed, duel_play_bang, gen_store_pick, ...) as
-    methods that validate the move, mutate this state, and advance the
-    phase — both the GUI (screens/game.py) and the headless AI trainer
-    (train_ai.py) drive a game purely through this one class's API."""
+    """한 경기 전체의 규칙 엔진. 모든 플레이어, 덱과 버림 더미, 현재 Phase를
+    보유하며, 규칙에 따른 행동들(play_card, respond_with_missed,
+    duel_play_bang, gen_store_pick 등)을 메서드로 제공한다 — 각 메서드는
+    행동의 유효성을 검사하고, 상태를 변경하고, 단계를 진행시킨다. GUI
+    (screens/game.py)와 화면 없는 AI 트레이너(train_ai.py) 모두 이 클래스의
+    API만으로 게임을 진행시킨다."""
     num_players: int
     human_ids: list[int]
     mode: str            # 'local' | 'ai'

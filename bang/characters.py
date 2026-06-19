@@ -4,8 +4,8 @@ import random
 
 
 class CharacterType(Enum):
-    """One of the 16 base-game characters; each gives its player a unique
-    passive or active ability (see CHARACTERS below for the description)."""
+    """기본판 16개 캐릭터 중 하나. 각 캐릭터는 고유한 패시브 또는 액티브
+    능력을 가진다 (자세한 설명은 아래 CHARACTERS 참고)."""
     BART_CASSIDY   = "bart_cassidy"
     BLACK_JACK     = "black_jack"
     CALAMITY_JANET = "calamity_janet"
@@ -26,8 +26,8 @@ class CharacterType(Enum):
 
 @dataclass(frozen=True)
 class CharacterInfo:
-    """Static rulebook info for one CharacterType: display names, starting
-    HP and the Korean ability description shown on its character card."""
+    """CharacterType 하나에 대한 고정 정보: 영문/한글 이름, 시작 체력,
+    캐릭터 카드에 표시되는 한글 능력 설명을 담는다."""
     name_en: str
     name_ko: str
     base_hp: int   # without Sheriff +1 bonus

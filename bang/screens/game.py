@@ -24,9 +24,10 @@ HP_OFF      = (55, 42, 30)
 
 
 class PlayedCardPopup:
-    """Large centered flash of a card the instant it's played — fades in,
-    holds, fades out. A new popup simply replaces whatever is showing, so
-    a brisk AI turn never has to queue or block on this purely cosmetic effect.
+    """카드가 플레이되는 순간 화면 중앙에 크게 표시되는 효과 — 페이드인,
+    유지, 페이드아웃 순으로 진행된다. 새 팝업은 표시 중인 것을 그냥
+    교체하므로, AI가 빠르게 턴을 진행해도 이 순수 장식용 효과 때문에
+    큐가 쌓이거나 멈출 일이 없다.
     """
     IN_MS    = 150
     HOLD_MS  = 500
@@ -89,11 +90,10 @@ class PlayedCardPopup:
 
 
 class GameScreen:
-    """The main table view and event-driven controller for an in-progress
-    match: renders every player/hand/equipment from a GameState, routes
-    pygame input events to the right phase handler (play, target pick,
-    response, duel, ...), and drives AI turns through BangAI between
-    frames via update()."""
+    """진행 중인 경기의 메인 테이블 화면이자 이벤트 기반 컨트롤러: GameState로부터
+    모든 플레이어/손패/장비를 그리고, pygame 입력 이벤트를 알맞은 단계 핸들러
+    (플레이, 대상 선택, 반응, 결투 등)로 전달하며, update()를 통해 프레임 사이에
+    BangAI로 AI의 턴을 진행시킨다."""
     RIGHT_X      = 860
     LOG_MAX      = 22
     CARD_SPACING = 90

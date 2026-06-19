@@ -112,10 +112,10 @@ def _save_weights(w: dict):
 
 
 class BangAI:
-    """Decision-maker for one AI-controlled seat. Given a difficulty (0-2,
-    see the module docstring above), its choose_* methods inspect the
-    current GameState and return the action it wants to take; Hard
-    difficulty also learns across games via record_game_result()."""
+    """AI가 조작하는 한 자리의 의사결정기. 난이도(0~2, 위 모듈 docstring
+    참고)에 따라 choose_* 메서드들이 현재 GameState를 살펴보고 원하는
+    행동을 반환한다. 어려움 난이도는 record_game_result()를 통해 경기를
+    거치며 학습도 한다."""
     def __init__(self, pid: int, difficulty: int = 1):
         """
         difficulty: 0 = 쉬움, 1 = 보통, 2 = 어려움

@@ -4,7 +4,7 @@ import random
 
 
 class Suit(Enum):
-    """One of the four standard playing-card suits a `Card` can have."""
+    """카드가 가질 수 있는 4가지 무늬(♥♦♣♠) 중 하나."""
     HEARTS   = "♥"
     DIAMONDS = "♦"
     CLUBS    = "♣"
@@ -12,8 +12,8 @@ class Suit(Enum):
 
 
 class CardType(Enum):
-    """Every distinct card name in the 80-card deck — brown (play-and-discard)
-    or blue (equipment that stays in play; see BLUE_TYPES below)."""
+    """80장 덱에 포함된 모든 카드 종류 — 사용 후 버려지는 갈색(brown) 카드와
+    계속 장착되어 있는 파란색(blue) 장비 카드로 나뉜다 (아래 BLUE_TYPES 참고)."""
     # Brown – play and discard
     BANG        = "BANG!"
     MISSED      = "Missed!"
@@ -107,8 +107,9 @@ CARD_DESC_KO = {
 
 @dataclass
 class Card:
-    """A single physical playing card: a type (what it does), a suit and
-    a value (used by suit/value-dependent effects like Dynamite or Jail)."""
+    """실제 카드 한 장을 나타낸다: 효과를 결정하는 카드 종류(card_type),
+    무늬(suit), 숫자(value)로 구성되며, 무늬·숫자는 다이너마이트나 감옥처럼
+    그 값에 따라 결과가 달라지는 효과에 쓰인다."""
     card_type: CardType
     suit: Suit
     value: int   # 1=Ace … 13=King

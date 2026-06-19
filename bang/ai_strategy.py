@@ -34,7 +34,7 @@ END_TURN_SCORE = 1.0
 
 
 class Action:
-    """One scored candidate move."""
+    """점수가 매겨진 후보 행동 1개를 나타낸다."""
     __slots__ = ("score", "tuple", "feat", "card_type", "target_id")
 
     def __init__(self, score, action_tuple, feat, card_type, target_id=-1):

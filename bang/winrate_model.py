@@ -29,9 +29,9 @@ def _sigmoid(z: float) -> float:
 
 
 class WinRateModel:
-    """Logistic-regression P(win | game state), trained offline by
-    train_ai.py on self-play data and loaded at runtime by the Medium AI
-    to decide whether to play optimally or ease off (dynamic difficulty)."""
+    """게임 상태로부터 P(승리)를 예측하는 로지스틱 회귀 모델. train_ai.py가
+    오프라인에서 자가대전 데이터로 학습시키고, 보통 난이도 AI가 실행 시점에
+    불러와 최적의 수를 둘지 한 수 물러설지(동적 난이도 조절)를 결정한다."""
     def __init__(self, n_features: int):
         self.n_features = n_features
         self.w: list[float] = [0.0] * n_features
