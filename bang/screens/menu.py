@@ -1,4 +1,4 @@
-"""Main menu: title + mode selection."""
+"""메인 메뉴: 타이틀 + 모드 선택."""
 import pygame
 from constants import (BG, PANEL_BG, WHITE, GRAY, GOLD, GREEN, RED, BLUE,
                        PURPLE, ACCENT, WIN_W, WIN_H)
@@ -31,11 +31,11 @@ class MenuScreen:
         s = self.screen
         s.fill(BG)
 
-        # Starfield
+        # 별 배경
         for (x, y, r, bright) in self._stars:
             pygame.draw.circle(s, (bright, bright, bright), (x, y), r)
 
-        # Title panel
+        # 타이틀 패널
         cx = WIN_W // 2
         panel_r = pygame.Rect(cx - 260, 140, 520, 130)
         rounded_rect(s, PANEL_BG, panel_r, 18)
@@ -50,13 +50,13 @@ class MenuScreen:
         self.btn_local.draw(s, self.btn_local.is_hovered(pos))
         self.btn_ai.draw(s, self.btn_ai.is_hovered(pos))
 
-        # Mode descriptions
+        # 모드 설명
         draw_text(s, "같은 화면에서 여러 명이 함께 플레이", "tiny", GRAY,
                   cx, 412, "center")
         draw_text(s, "혼자 또는 인간과 AI가 함께 플레이", "tiny", GRAY,
                   cx, 492, "center")
 
-        # Legend
+        # 범례
         legend_y = WIN_H - 80
         roles = [("보안관", GOLD), ("부관", BLUE), ("무법자", RED), ("배신자", PURPLE)]
         total_w = len(roles) * 130

@@ -1,17 +1,16 @@
-"""Win-rate prediction model — logistic regression trained by gradient descent.
+"""승률 예측 모델 — 경사 하강법으로 학습되는 로지스틱 회귀.
 
     P(win | x) = sigma(w.x + b),     sigma(z) = 1 / (1 + e^-z)
 
-w and b are fit by minimizing binary cross-entropy loss
+w와 b는 이진 교차 엔트로피 손실(binary cross-entropy loss)을 최소화하여 적합시킨다
 
     L = -(y*log(p) + (1-y)*log(1-p))
 
-via batch gradient descent (see fit()). Pure Python, no numpy: this
-module is imported by the live game (ai_agent.BangAI, Medium difficulty)
-so it must not pull in a numeric-computing dependency just to run
-inference. Training on a large self-play dataset is done offline by
-train_ai.py, where plain loops are still fast enough for this feature
-vector's size.
+배치 경사 하강법(batch gradient descent)을 통해 (fit() 참고). 순수 Python으로
+작성되었으며 numpy를 사용하지 않는다: 이 모듈은 실제 게임(ai_agent.BangAI,
+보통 난이도)에서 임포트되므로, 추론을 실행하기 위해 수치 계산용 의존성을
+끌어들이지 않아야 한다. 대규모 자가대전 데이터셋에 대한 학습은 train_ai.py가
+오프라인으로 수행하며, 이 특징 벡터의 크기에서는 일반 루프로도 충분히 빠르다.
 """
 from __future__ import annotations
 import json
@@ -42,7 +41,7 @@ class WinRateModel:
             "loss": [], "accuracy": [], "val_loss": [], "val_accuracy": [],
         }
 
-    # ── Inference ────────────────────────────────────────────────────────
+    # ── 추론 ────────────────────────────────────────────────────────
     def _normalize(self, x: list[float]) -> list[float]:
         return [(xi - m) / s if s > 1e-9 else 0.0
                 for xi, m, s in zip(x, self.mean, self.std)]
@@ -52,12 +51,12 @@ class WinRateModel:
         z  = self.b + sum(wi * xi for wi, xi in zip(self.w, xn))
         return _sigmoid(z)
 
-    # ── Training ─────────────────────────────────────────────────────────
+    # ── 학습 ─────────────────────────────────────────────────────────
     def fit(self, X: list[list[float]], y: list[int],
             X_val: list[list[float]] | None = None, y_val: list[int] | None = None,
             lr: float = 0.1, epochs: int = 300, l2: float = 1e-3,
             verbose: bool = False):
-        """Batch gradient descent on the binary cross-entropy loss above."""
+        """위에서 설명한 이진 교차 엔트로피 손실에 대한 배치 경사 하강법."""
         n = len(X)
         if n == 0:
             return
@@ -124,10 +123,10 @@ class WinRateModel:
         return total_loss / n, correct / n
 
     def evaluate(self, X: list[list[float]], y: list[int]) -> tuple[float, float]:
-        """Returns (BCE loss, accuracy) on a raw (unnormalized) dataset."""
+        """원본(정규화되지 않은) 데이터셋에 대한 (BCE 손실, 정확도)를 반환한다."""
         return self._evaluate_normalized([self._normalize(row) for row in X], y)
 
-    # ── Persistence ──────────────────────────────────────────────────────
+    # ── 저장/불러오기 ──────────────────────────────────────────────────────
     def save(self, feature_names: list[str], path: Path = MODEL_FILE):
         data = {
             "feature_names": feature_names,

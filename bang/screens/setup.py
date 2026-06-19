@@ -1,4 +1,4 @@
-"""Setup screen: player count + name/type configuration."""
+"""설정 화면: 플레이어 수 + 이름/타입 구성."""
 import pygame
 from constants import (BG, PANEL_BG, WHITE, GRAY, GOLD, GREEN, ACCENT, DIM,
                        BLUE, RED, WIN_W, WIN_H, ROLE_COLORS)
@@ -20,9 +20,9 @@ ROLE_COUNTS = {
 
 DIFFICULTY_LABELS = ["쉬움", "보통", "어려움"]
 DIFFICULTY_COLORS = [
-    (50, 140, 70),    # green  – easy
-    (60, 100, 180),   # blue   – medium
-    (160, 50, 50),    # red    – hard
+    (50, 140, 70),    # 녹색 – 쉬움
+    (60, 100, 180),   # 청색 – 보통
+    (160, 50, 50),    # 적색 – 어려움
 ]
 
 
@@ -34,7 +34,7 @@ class SetupScreen:
         self.mode   = mode      # 'local' | 'ai'
         self.n      = 4
         self.ai_difficulty = 1   # 0=쉬움 1=보통 2=어려움
-        # For AI mode: only player 0 is human by default
+        # AI 모드에서는 기본적으로 플레이어 0만 사람으로 설정
         self.human_ids: list[int] = list(range(self.n)) if mode == "local" else [0]
         self._build_buttons()
 
@@ -45,7 +45,7 @@ class SetupScreen:
         self.btn_start = Button((cx - 120, WIN_H - 90, 240, 54), "게임 시작!", GREEN,
                                 radius=12, fkey="sub")
         self.btn_back  = Button((30, WIN_H - 90, 100, 40), "< 뒤로", DIM, radius=8)
-        # Difficulty buttons (AI mode only)
+        # 난이도 버튼 (AI 모드에서만 사용)
         self.diff_btns: list[Button] = []
         if self.mode == "ai":
             bw, bh, gap = 100, 38, 10
@@ -99,7 +99,7 @@ class SetupScreen:
                     self.ai_difficulty = di
                     break
             for idx, btn in self.toggles:
-                if btn.clicked(event, pos) and idx != 0:  # P1 always human in AI mode
+                if btn.clicked(event, pos) and idx != 0:  # AI 모드에서 P1은 항상 사람
                     if idx in self.human_ids:
                         self.human_ids.remove(idx)
                     else:
@@ -133,17 +133,17 @@ class SetupScreen:
         mode_label = "로컬 플레이" if self.mode == "local" else "AI 대전"
         draw_text(s, f"모드: {mode_label}", "small", GRAY, cx, 96, "center")
 
-        # Player count
+        # 플레이어 수
         rounded_rect(s, PANEL_BG, pygame.Rect(cx - 200, 162, 400, 82), 12)
         draw_text(s, "플레이어 수", "small", GRAY, cx, 170, "center")
         draw_text(s, str(self.n), "large", GOLD, cx, 194, "center")
         self.btn_minus.draw(s, self.btn_minus.is_hovered(pos))
         self.btn_plus.draw(s, self.btn_plus.is_hovered(pos))
 
-        # Role composition
+        # 역할 구성
         draw_text(s, ROLE_COUNTS[self.n], "tiny", (160, 140, 80), cx, 258, "center")
 
-        # Difficulty selector + player type toggles (AI mode)
+        # 난이도 선택 + 플레이어 타입 토글 (AI 모드)
         if self.mode == "ai":
             draw_text(s, "AI 난이도", "small", GRAY, cx, 272, "center")
             for di, dbtn in enumerate(self.diff_btns):
@@ -164,7 +164,7 @@ class SetupScreen:
         for _, btn in self.toggles:
             btn.draw(s, btn.is_hovered(pos))
 
-        # Rules summary
+        # 규칙 요약
         ry = 442
         rounded_rect(s, PANEL_BG, pygame.Rect(cx - 340, ry, 680, 200), 12)
         rules = [

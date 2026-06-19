@@ -1,4 +1,4 @@
-"""Handoff screen shown between turns in local mode — shows role + character card."""
+"""로컬 모드에서 턴 사이에 표시되는 핸드오프 화면 — 역할 + 캐릭터 카드를 보여준다."""
 import pygame
 from constants import BG, PANEL_BG, WHITE, GOLD, GRAY, GREEN, DIM, WIN_W, WIN_H
 from ui_utils import draw_text, rounded_rect, Button
@@ -12,16 +12,16 @@ class HandoffScreen:
     직전에 띄워서, 본인만 자신의 역할/캐릭터 카드를 확인한 뒤 클릭해서
     공용 GameScreen으로 넘어가게 한다."""
     CARD_W = 210
-    CARD_H = 296   # ~√2 ratio
+    CARD_H = 296   # 비율 약 √2
 
     def __init__(self, screen: pygame.Surface, player_info: dict):
         """
-        player_info keys:
+        player_info의 키:
           name        – str
           role        – Role
           character   – CharacterType
           max_hp      – int
-          is_sheriff  – bool (role already publicly known)
+          is_sheriff  – bool (역할이 이미 공개된 상태인지)
         """
         self.screen = screen
         self.info   = player_info
@@ -58,23 +58,23 @@ class HandoffScreen:
         cx, cy = WIN_W // 2, WIN_H // 2
         w, h   = self.CARD_W, self.CARD_H
 
-        # Header
+        # 헤더
         draw_text(s, "화면을 가립니다", "sub", GRAY, cx, 30, "center")
         draw_text(s, self.info["name"], "title", GOLD, cx, 60, "center")
         draw_text(s, "의 턴입니다", "sub", WHITE, cx, 108, "center")
 
-        # Cards side by side
+        # 카드를 나란히 배치
         gap   = 32
         total = w * 2 + gap
         lx    = cx - total // 2
         card_y = 140
 
-        # Role card
+        # 역할 카드
         s.blit(self._role_surf, (lx, card_y))
         draw_text(s, "역할 카드", "tiny", GRAY,
                   lx + w // 2, card_y - 18, "center")
 
-        # Character card
+        # 캐릭터 카드
         rx = lx + w + gap
         s.blit(self._char_surf, (rx, card_y))
         draw_text(s, "캐릭터 카드", "tiny", GRAY,

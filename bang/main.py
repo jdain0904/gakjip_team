@@ -1,4 +1,4 @@
-"""Entry point for Bang! game."""
+"""Bang! 게임의 진입점."""
 import sys
 import pygame
 
@@ -34,7 +34,7 @@ def main():
                 pygame.quit()
                 sys.exit()
 
-            # ── Menu ──────────────────────────────────────────────────────
+            # ── 메뉴 ──────────────────────────────────────────────────────
             if state == "menu":
                 result = menu.handle(event)
                 if result in ("local", "ai"):
@@ -42,7 +42,7 @@ def main():
                     setup = SetupScreen(screen, mode)
                     state = "setup"
 
-            # ── Setup ─────────────────────────────────────────────────────
+            # ── 설정 ─────────────────────────────────────────────────────
             elif state == "setup":
                 result = setup.handle(event)
                 if result:
@@ -58,18 +58,18 @@ def main():
                         game  = GameScreen(screen, gs,
                                            ai_difficulty=result.get("ai_difficulty", 1))
                         state = "game"
-                        # Show first handoff if local mode
+                        # 로컬 모드라면 첫 핸드오프 화면 표시
                         if game.needs_handoff():
                             info    = game.consume_handoff()
                             handoff = HandoffScreen(screen, info)
                             state   = "handoff"
 
-            # ── Handoff ───────────────────────────────────────────────────
+            # ── 핸드오프 ───────────────────────────────────────────────────
             elif state == "handoff":
                 if handoff and handoff.handle(event):
                     state = "game"
 
-            # ── Game ──────────────────────────────────────────────────────
+            # ── 게임 ──────────────────────────────────────────────────────
             elif state == "game" and game:
                 result = game.handle(event)
                 if result == "menu":
@@ -77,16 +77,16 @@ def main():
                     state = "menu"
                     game  = None
 
-        # ── Updates ───────────────────────────────────────────────────────
+        # ── 업데이트 ───────────────────────────────────────────────────────
         if state == "game" and game:
             game.update(dt)
-            # Check if handoff is needed after AI/auto step
+            # AI/자동 처리 단계 후 핸드오프가 필요한지 확인
             if game.needs_handoff():
                 info    = game.consume_handoff()
                 handoff = HandoffScreen(screen, info)
                 state   = "handoff"
 
-        # ── Draw ──────────────────────────────────────────────────────────
+        # ── 그리기 ──────────────────────────────────────────────────────────
         if state == "menu":
             menu.draw()
         elif state == "setup" and setup:

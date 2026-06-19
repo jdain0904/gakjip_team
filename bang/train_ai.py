@@ -1,32 +1,33 @@
-"""Offline self-play training pipeline for the Medium-difficulty win-rate
-prediction model and the Hard-difficulty reinforcement-learned weights.
+"""보통 난이도 승률 예측 모델과 어려움 난이도 강화학습 가중치를 위한
+오프라인 자가대전 학습 파이프라인.
 
-Two models come out of the same batch of self-play games:
+같은 자가대전 게임 배치에서 두 가지 모델이 만들어진다:
 
-1. winrate_model.json — a logistic regression P(win|x) = sigma(w.x+b)
-   fit by gradient descent on binary cross-entropy loss (see
-   winrate_model.WinRateModel), trained on (state vector, 1/0 win
-   label) pairs snapshotted once per turn for every alive player.
-   ai_agent.BangAI (Medium difficulty) uses this at runtime to predict
-   the human side's win probability and dynamically ease off or play
-   optimally — the project's dynamic difficulty adjustment.
+1. winrate_model.json — P(win|x) = sigma(w.x+b) 형태의 로지스틱 회귀로,
+   이진 교차 엔트로피 손실에 대한 경사 하강법으로 적합시킨다
+   (winrate_model.WinRateModel 참고). 살아있는 모든 플레이어에 대해
+   턴마다 한 번씩 스냅샷한 (상태 벡터, 1/0 승패 레이블) 쌍으로 학습한다.
+   ai_agent.BangAI(보통 난이도)는 실행 시점에 이 모델을 사용해 인간
+   측의 승리 확률을 예측하고, 이에 따라 동적으로 힘을 빼거나 최적의
+   수를 두도록 한다 — 이 프로젝트의 동적 난이도 조절 기능이다.
 
-2. ai_weights.json — the Hard-difficulty AI's scoring weights, updated
-   via ai_agent.BangAI.record_game_result(): an every-visit Monte
-   Carlo policy-improvement step over the linear value-function
-   approximation in ai_strategy.score_play_actions. Every feature tag
-   a game's policy fired gets nudged toward the actions that led to a
-   win and away from the ones that led to a loss.
+2. ai_weights.json — 어려움 난이도 AI의 점수 평가 가중치로,
+   ai_agent.BangAI.record_game_result()를 통해 갱신된다: 이는
+   ai_strategy.score_play_actions의 선형 가치 함수 근사에 대한
+   every-visit 몬테카를로 정책 개선(policy-improvement) 단계다.
+   한 게임의 정책이 사용한 모든 특징 태그는 승리로 이어진 행동
+   쪽으로는 가중치가 올라가고, 패배로 이어진 행동 쪽으로는
+   가중치가 내려간다.
 
-Every seat in every self-play game is Hard difficulty. This sidesteps
-a circular dependency (Medium needs a trained win-rate model to make
-any decision at all, so it can't generate the data used to train that
-same model) and keeps the dataset free of skill-asymmetry — the only
-thing distinguishing a winning state from a losing one is the game
-state itself (role, HP, equipment, turn number, ...), which is exactly
-what the win-rate model should learn to read.
+자가대전의 모든 좌석은 어려움 난이도로 고정된다. 이는 순환 의존성을
+피하기 위함이다(보통 난이도는 결정을 내리는 데 학습된 승률 모델이
+필요한데, 그 모델을 학습시킬 데이터를 생성할 수 없는 문제가 생긴다)
+또한 데이터셋에 실력 차이로 인한 비대칭이 생기지 않도록 한다 — 승리
+상태와 패배 상태를 구분하는 유일한 요소는 게임 상태 자체(역할, HP,
+장비, 턴 번호 등)뿐이어야 하며, 이것이 바로 승률 모델이 읽어내야 할
+것이다.
 
-Usage:
+사용법:
     python3 train_ai.py [n_games]
 """
 from __future__ import annotations
@@ -53,18 +54,20 @@ NAME_POOL = [f"P{i}" for i in range(7)]
 
 
 def _worst_discard_idx(hand) -> int:
-    """Same discard-priority heuristic as screens.game._worst_card_idx,
-    reimplemented here so this headless trainer doesn't need to import
-    pygame/the UI layer just to break end-of-turn discard ties."""
+    """screens.game._worst_card_idx와 동일한 버림 우선순위 휴리스틱을
+    여기서 다시 구현한 것으로, 이 헤드리스(headless) 트레이너가 턴 종료 시
+    버릴 카드를 결정하기 위해 pygame/UI 레이어를 임포트할 필요가 없도록
+    한다."""
     priority = {CardType.MISSED: 0, CardType.BEER: 1}
     return min(range(len(hand)), key=lambda i: priority.get(hand[i].card_type, 5))
 
 
 def play_one_game(gs: GameState, ais: dict[int, BangAI], max_steps: int = 20000):
-    """Drive `gs` to GAME_OVER by phase dispatch, mirroring the turn flow
-    screens/game.py drives interactively. Returns a list of
-    (pid, state_vector) snapshots taken once per turn for every alive
-    player, or None if the game didn't finish within max_steps.
+    """phase 분배(dispatch)를 통해 `gs`를 GAME_OVER 상태까지 진행시키며,
+    이는 screens/game.py가 대화형으로 진행하는 턴 흐름을 그대로 따른다.
+    살아있는 모든 플레이어에 대해 턴마다 한 번씩 찍은 (pid, state_vector)
+    스냅샷 목록을 반환하며, max_steps 내에 게임이 끝나지 않으면 None을
+    반환한다.
     """
     samples: list[tuple[int, list[float]]] = []
     recorded_turn = -1
@@ -162,7 +165,7 @@ def run_self_play(n_games: int, shared_weights: dict, verbose_every: int = 200):
             gs  = GameState.new_game(num_players=n, human_ids=[], mode="ai", names=names)
             ais = {i: BangAI(i, difficulty=2) for i in range(n)}
             for ai in ais.values():
-                ai._weights = shared_weights   # one shared dict — avoids a save race
+                ai._weights = shared_weights   # 공유 dict 하나만 사용 — 저장 시 경쟁 상태(race) 방지
 
             samples = play_one_game(gs, ais)
             if samples is None:
@@ -207,7 +210,7 @@ def make_charts(model: WinRateModel, X_val, y_val, role_wins: dict, finished: in
 
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    # 1) Loss / accuracy curves over training epochs (train vs validation)
+    # 1) 학습 에포크에 따른 손실/정확도 곡선 (학습 vs 검증)
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
     epochs = range(1, len(model.history["loss"]) + 1)
     axes[0].plot(epochs, model.history["loss"], label="train")
@@ -225,7 +228,7 @@ def make_charts(model: WinRateModel, X_val, y_val, role_wins: dict, finished: in
     fig.savefig(os.path.join(OUT_DIR, "loss_accuracy.png"), dpi=130)
     plt.close(fig)
 
-    # 2) Calibration plot: predicted-probability bucket vs actual win fraction
+    # 2) 캘리브레이션(calibration) 플롯: 예측 확률 구간(bucket) vs 실제 승률
     if X_val:
         n_bins = 10
         bins: list[list[int]] = [[] for _ in range(n_bins)]
@@ -251,7 +254,7 @@ def make_charts(model: WinRateModel, X_val, y_val, role_wins: dict, finished: in
         fig.savefig(os.path.join(OUT_DIR, "calibration.png"), dpi=130)
         plt.close(fig)
 
-    # 3) Win rate by role across self-play games (balance check)
+    # 3) 자가대전 게임 전체에서 역할별 승률 (밸런스 점검)
     labels = ["Sheriff+Deputy", "Outlaw", "Renegade"]
     vals = [role_wins.get(Role.SHERIFF, 0), role_wins.get(Role.OUTLAW, 0), role_wins.get(Role.RENEGADE, 0)]
     pct = [100 * v / finished if finished else 0 for v in vals]
@@ -265,7 +268,7 @@ def make_charts(model: WinRateModel, X_val, y_val, role_wins: dict, finished: in
     fig.savefig(os.path.join(OUT_DIR, "role_winrates.png"), dpi=130)
     plt.close(fig)
 
-    # 4) RL weight drift: default vs self-play-trained Hard AI weights
+    # 4) 강화학습 가중치 변화: 기본값 vs 자가대전으로 학습된 어려움 난이도 AI 가중치
     feats    = list(default_weights.keys())
     defaults = [default_weights[f] for f in feats]
     trained  = [trained_weights.get(f, default_weights[f]) for f in feats]
@@ -298,7 +301,7 @@ def main():
     _save_weights(shared_weights)
     print("Saved RL-trained Hard AI weights -> ai_weights.json")
 
-    # ── Train the win-rate model ─────────────────────────────────────────
+    # ── 승률 모델 학습 ─────────────────────────────────────────
     combined = list(zip(X, y))
     rng = random.Random(BASE_SEED)
     rng.shuffle(combined)
