@@ -14,7 +14,7 @@ class Suit(Enum):
 class CardType(Enum):
     """80장 덱에 포함된 모든 카드 종류 — 사용 후 버려지는 갈색(brown) 카드와
     계속 장착되어 있는 파란색(blue) 장비 카드로 나뉜다 (아래 BLUE_TYPES 참고)."""
-    # Brown – play and discard
+    # 갈색 – 사용 후 버림
     BANG        = "BANG!"
     MISSED      = "Missed!"
     BEER        = "Beer"
@@ -27,7 +27,7 @@ class CardType(Enum):
     SALOON      = "Saloon"
     GEN_STORE   = "Gen. Store"
     DUEL        = "Duel"
-    # Blue – stay in play
+    # 파란색 – 장착 유지
     VOLCANIC    = "Volcanic"
     SCHOFIELD   = "Schofield"
     REMINGTON   = "Remington"
@@ -112,7 +112,7 @@ class Card:
     그 값에 따라 결과가 달라지는 효과에 쓰인다."""
     card_type: CardType
     suit: Suit
-    value: int   # 1=Ace … 13=King
+    value: int   # 1=에이스 … 13=킹
 
     @property
     def is_blue(self):
@@ -146,50 +146,50 @@ def build_deck() -> list[Card]:
 
     T, S = CardType, Suit
 
-    # BANG! – 25
-    for v in range(1, 14):   add(T.BANG, S.SPADES, v)     # 13
-    for v in range(1, 10):   add(T.BANG, S.DIAMONDS, v)   # 9
-    for v in [1, 2]:          add(T.BANG, S.CLUBS, v)      # 2
-    add(T.BANG, S.HEARTS, 1)                               # 1  → total 25
+    # BANG! – 25장
+    for v in range(1, 14):   add(T.BANG, S.SPADES, v)     # 13장
+    for v in range(1, 10):   add(T.BANG, S.DIAMONDS, v)   # 9장
+    for v in [1, 2]:          add(T.BANG, S.CLUBS, v)      # 2장
+    add(T.BANG, S.HEARTS, 1)                               # 1장  → 총 25장
 
-    # Missed! – 12
-    for v in range(2, 10):    add(T.MISSED, S.CLUBS, v)    # 8
-    for v in [10, 11]:        add(T.MISSED, S.SPADES, v)   # 2
-    for v in [10, 11]:        add(T.MISSED, S.HEARTS, v)   # 2  → 12
+    # Missed! – 12장
+    for v in range(2, 10):    add(T.MISSED, S.CLUBS, v)    # 8장
+    for v in [10, 11]:        add(T.MISSED, S.SPADES, v)   # 2장
+    for v in [10, 11]:        add(T.MISSED, S.HEARTS, v)   # 2장  → 12장
 
-    # Beer – 6
+    # 맥주 – 6장
     for v in range(6, 12):    add(T.BEER, S.HEARTS, v)
 
-    # Stagecoach – 2
+    # 역마차 – 2장
     add(T.STAGECOACH, S.SPADES, 9)
     add(T.STAGECOACH, S.CLUBS,  9)
 
-    # Wells Fargo – 1
+    # 웰스 파고 – 1장
     add(T.WELLS_FARGO, S.HEARTS, 3)
 
-    # Cat Balou – 4
+    # 캣 발루 – 4장
     for v in [9, 10, 11, 13]: add(T.CAT_BALOU, S.DIAMONDS, v)
 
-    # Panic! – 4
+    # 패닉! – 4장
     add(T.PANIC, S.HEARTS, 11); add(T.PANIC, S.HEARTS, 12)
     add(T.PANIC, S.DIAMONDS, 1); add(T.PANIC, S.DIAMONDS, 8)
 
-    # Indians! – 2
+    # 인디언! – 2장
     add(T.INDIANS, S.DIAMONDS, 13); add(T.INDIANS, S.CLUBS, 13)
 
-    # Gatling – 1
+    # 개틀링 – 1장
     add(T.GATLING, S.HEARTS, 10)
 
-    # Saloon – 1
+    # 살롱 – 1장
     add(T.SALOON, S.HEARTS, 5)
 
-    # General Store – 2
+    # 잡화점 – 2장
     add(T.GEN_STORE, S.CLUBS, 9); add(T.GEN_STORE, S.SPADES, 12)
 
-    # Duel – 3
+    # 결투 – 3장
     add(T.DUEL, S.CLUBS, 11); add(T.DUEL, S.CLUBS, 12); add(T.DUEL, S.SPADES, 1)
 
-    # Equipment
+    # 장비
     add(T.VOLCANIC,  S.SPADES, 10); add(T.VOLCANIC,  S.CLUBS,  10)
     add(T.SCHOFIELD, S.CLUBS,  11); add(T.SCHOFIELD, S.SPADES, 12); add(T.SCHOFIELD, S.HEARTS, 12)
     add(T.REMINGTON, S.CLUBS,  13)

@@ -30,7 +30,7 @@ class CharacterInfo:
     캐릭터 카드에 표시되는 한글 능력 설명을 담는다."""
     name_en: str
     name_ko: str
-    base_hp: int   # without Sheriff +1 bonus
+    base_hp: int   # 보안관 +1 보너스 적용 전 체력
     desc: str
 
 

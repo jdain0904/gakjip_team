@@ -1,4 +1,4 @@
-"""Main game screen — character-aware, full phase support."""
+"""메인 게임 화면 — 캐릭터 정보를 인식하며, 모든 단계를 지원한다."""
 from __future__ import annotations
 import math, pygame
 from constants import (
@@ -116,16 +116,16 @@ class GameScreen:
         self.selected_card_idx: int = -1
         self.target_mode: bool = False
         self.target_candidates: list[int] = []
-        self.kit_selected_local: list[int] = []   # which cards picked so far by human
+        self.kit_selected_local: list[int] = []   # 사람이 지금까지 선택한 카드들
 
-        # Sid Ketchum: discard 2 cards -> heal 1 HP, usable on his own turn.
+        # 시드 케첨: 카드 2장을 버리면 -> HP 1 회복, 자신의 턴에 사용 가능.
         self.sid_picking: bool = False
         self.sid_picked: list[int] = []
 
-        # Cat Balou/Panic!: once a target with equipment is chosen, pause
-        # here so the human can pick a *specific* in-play card (rulebook:
-        # "choose and discard one card in play") instead of always hitting
-        # whatever happens to sit at index 0.
+        # 캣 발루/패닉!: 장비를 가진 대상이 선택되면, 사람이 인덱스 0에
+        # 있는 카드를 무조건 맞히는 대신 *특정* 장착 카드를 고를 수 있도록
+        # (규칙서: "장착 중인 카드 1장을 선택하여 버리게 한다") 여기서
+        # 멈춰서 기다린다.
         self.strip_mode: bool = False
         self.strip_card_idx: int = -1
         self.strip_target_id: int = -1
@@ -140,8 +140,8 @@ class GameScreen:
             WIN_W - self.RIGHT_X + 6, WIN_H,
             tuple(min(255, c + 12) for c in PANEL_BG), PANEL_DARK)
 
-        # Pre-rendered character cards for the avatar hover tooltip (static
-        # per player for the whole game, so build once instead of per frame).
+        # 아바타 호버 툴팁용으로 미리 렌더링한 캐릭터 카드 (게임 내내
+        # 플레이어별로 고정이므로, 매 프레임이 아니라 한 번만 만들어 둔다).
         self._char_card_surfs: dict[int, pygame.Surface] = {}
         self.TIP_CARD_W, self.TIP_CARD_H = 150, 211
         for pid, pl in enumerate(gs.players):
@@ -165,7 +165,7 @@ class GameScreen:
                                   "맥주 사용", GREEN, radius=9, fkey="normal")
         self.btn_die     = Button((self.RIGHT_X + 200, WIN_H - 55, 140, 44),
                                   "탈락", (100, 40, 40), radius=9, fkey="normal")
-        # Character-draw buttons
+        # 캐릭터 드로우 버튼
         self.btn_from_deck    = Button((WIN_W // 2 - 180, WIN_H // 2 + 60, 160, 44),
                                        "덱에서", ACCENT, radius=9, fkey="normal")
         self.btn_from_discard = Button((WIN_W // 2 + 20, WIN_H // 2 + 60, 160, 44),
@@ -175,7 +175,7 @@ class GameScreen:
         self._handoff_name = ""
         self._auto_start()
 
-    # ── Handoff ───────────────────────────────────────────────────────────
+    # ── 인계(Handoff) ─────────────────────────────────────────────────────
     def _auto_start(self):
         self._check_handoff_needed()
 
@@ -202,14 +202,14 @@ class GameScreen:
                 "character": p.character,
                 "max_hp":    p.max_hp,
             }
-        # fallback (shouldn't happen)
+        # 대체 처리 (발생해서는 안 되는 상황)
         from roles import Role
         from characters import CharacterType
         return {"name": name, "role": Role.OUTLAW,
                 "character": CharacterType.BART_CASSIDY, "max_hp": 4}
 
     # ═════════════════════════════════════════════════════════════════════
-    # Event handling
+    # 이벤트 처리
     # ═════════════════════════════════════════════════════════════════════
     def handle(self, event) -> str | None:
         pos = pygame.mouse.get_pos()
@@ -287,7 +287,7 @@ class GameScreen:
                 return gs.current_pid
         return None
 
-    # ── PLAY ──────────────────────────────────────────────────────────────
+    # ── PLAY(플레이) ────────────────────────────────────────────────────────
     def _sid_ketchum_available(self, pid: int) -> bool:
         p = self.gs.players[pid]
         return (p.character == CharacterType.SID_KETCHUM
@@ -366,7 +366,7 @@ class GameScreen:
         self._deselect()
         self._on_phase_change()
 
-    # ── Cat Balou/Panic! strip-target picker ────────────────────────────────
+    # ── 캣 발루/패닉! 대상 카드 선택기 ──────────────────────────────────────
     def _handle_strip_pick(self, event, pos, pid):
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return
@@ -379,22 +379,23 @@ class GameScreen:
                                 target_card_idx=choice)
 
     def _spawn_popup(self, card, actor_pid: int, target_pid: int = -1):
-        """Flash a large copy of the card that was just played at screen center."""
+        """방금 플레이된 카드를 크게 키워서 화면 중앙에 잠깐 표시한다."""
         actor  = self.gs.players[actor_pid].name
         target = self.gs.players[target_pid].name if target_pid >= 0 else None
         self.card_popup = PlayedCardPopup(card, actor, target)
 
-    # ── RESPONSE ──────────────────────────────────────────────────────────
+    # ── RESPONSE(반응) ──────────────────────────────────────────────────────
     def _handle_response(self, event, pos, pid):
         gs = self.gs
         if gs.resp_current != pid:
             return
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return
-        # The Barrel draw is optional ("you may try"), not mandatory, and
-        # doesn't apply against Indians! — so it must be its own button, not
-        # something that silently eats whatever the player's first click was
-        # meant for (that used to make the real card click look unresponsive).
+        # 나무통 드로우는 필수가 아닌 선택 사항("시도해도 좋다")이며
+        # 인디언!에는 적용되지 않는다 — 따라서 별도의 버튼으로 분리해야
+        # 하며, 플레이어의 첫 클릭이 의도한 대상을 조용히 가로채 버리는
+        # 식으로 처리하면 안 된다 (예전에는 그래서 실제 카드 클릭이
+        # 반응하지 않는 것처럼 보였다).
         if (gs.resp_type != RespType.INDIANS and not gs.barrel_checked
                 and gs.players[pid].has_barrel() and self.btn_barrel.clicked(event, pos)):
             saved = gs.check_barrel()
@@ -418,7 +419,7 @@ class GameScreen:
                 gs.respond_with_missed(ci)
                 self._on_phase_change()
 
-    # ── DUEL ──────────────────────────────────────────────────────────────
+    # ── DUEL(결투) ──────────────────────────────────────────────────────────
     def _handle_duel(self, event, pos, pid):
         gs = self.gs
         if gs.duel_current != pid:
@@ -440,7 +441,7 @@ class GameScreen:
                 gs.duel_play_bang(ci)
                 self._on_phase_change()
 
-    # ── GEN STORE ─────────────────────────────────────────────────────────
+    # ── GEN STORE(잡화점) ────────────────────────────────────────────────────
     def _handle_gen_store(self, event, pos, pid):
         gs = self.gs
         if not gs.gen_store_order or gs.gen_store_order[0] != pid:
@@ -452,7 +453,7 @@ class GameScreen:
             gs.gen_store_pick(pid, ci)
             self._on_phase_change()
 
-    # ── DISCARD ───────────────────────────────────────────────────────────
+    # ── DISCARD(버리기) ──────────────────────────────────────────────────────
     def _handle_discard(self, event, pos, pid):
         gs = self.gs
         if gs.current_pid != pid:
@@ -464,7 +465,7 @@ class GameScreen:
             gs.discard_card(ci)
             self._on_phase_change()
 
-    # ── BEER SAVE ─────────────────────────────────────────────────────────
+    # ── BEER SAVE(맥주로 살아나기) ───────────────────────────────────────────
     def _handle_beer_save(self, event, pos, pid):
         gs = self.gs
         if gs.beer_save_pid != pid:
@@ -479,13 +480,13 @@ class GameScreen:
             gs.beer_save_decline()
             self._on_phase_change()
             return
-        # Also allow clicking a Beer card in hand
+        # 손패의 맥주 카드를 직접 클릭하는 것도 허용
         ci = self._click_hand_card(pos, pid)
         if ci >= 0 and gs.players[pid].hand[ci].card_type == CardType.BEER:
             gs.beer_save_use()
             self._on_phase_change()
 
-    # ── CHAR DRAW ─────────────────────────────────────────────────────────
+    # ── CHAR DRAW(캐릭터별 특수 드로우) ──────────────────────────────────────
     def _handle_char_draw(self, event, pos, pid):
         gs = self.gs
         if gs.char_draw_pid != pid:
@@ -509,8 +510,9 @@ class GameScreen:
         if gs.char_draw_type == "jesse":
             alive = gs._alive_ids()
             targets = [i for i in alive if i != pid and gs.players[i].hand]
-            # Must match the dynamic panel_h in _draw_char_draw_overlay(),
-            # or button hit-boxes drift out of sync with where they're drawn.
+            # _draw_char_draw_overlay()의 동적 panel_h 계산과 반드시 일치해야
+            # 한다. 그렇지 않으면 버튼 히트박스가 실제로 그려지는 위치와
+            # 어긋나게 된다.
             panel_h = max(260, 76 + len(targets) * 42 + 56)
             panel_y = cy - panel_h // 2
             btn_y = panel_y + 76
@@ -522,7 +524,7 @@ class GameScreen:
                     return
                 btn_y += 42
 
-    # ── KIT PEEK ──────────────────────────────────────────────────────────
+    # ── KIT PEEK(킷 칼슨 미리보기) ────────────────────────────────────────────
     def _handle_kit_peek(self, event, pos, pid):
         gs = self.gs
         if gs.current_pid != pid:
@@ -538,7 +540,7 @@ class GameScreen:
                 self._on_phase_change()
 
     # ═════════════════════════════════════════════════════════════════════
-    # AI processing
+    # AI 처리
     # ═════════════════════════════════════════════════════════════════════
     def update(self, dt_ms: int):
         self._anim_clock += dt_ms
@@ -579,7 +581,7 @@ class GameScreen:
                     gs.char_draw_from_player(target)
                 else:
                     gs.char_draw_from_deck()
-            else:  # pedro
+            else:  # 페드로
                 if ai.pedro_ramirez_from_discard(gs):
                     gs.char_draw_from_discard()
                 else:
@@ -725,7 +727,7 @@ class GameScreen:
                     self._handoff_name = gs.players[r].name
 
     def _notify_ai_game_over(self):
-        """Update Hard AI learning weights based on game outcome."""
+        """게임 결과를 바탕으로 Hard AI의 학습 가중치를 갱신한다."""
         gs = self.gs
         if gs.winner_role is None:
             return
@@ -743,7 +745,7 @@ class GameScreen:
         self.sid_picked        = []
 
     # ═════════════════════════════════════════════════════════════════════
-    # Hit testing
+    # 히트 테스트(클릭 판정)
     # ═════════════════════════════════════════════════════════════════════
     def _click_player(self, pos) -> int | None:
         for pid, (px, py) in self._player_positions.items():
@@ -769,10 +771,11 @@ class GameScreen:
         return -1
 
     def _click_strip_picker_card(self, pos, target) -> int | None:
-        """Hit-test the Cat Balou/Panic! picker. Returns an `all_cards()`
-        index for an equipment pick, -1 for the "random hand card" slot,
-        or None if the click missed everything (layout mirrors the draw
-        function below — keep both in sync)."""
+        """캣 발루/패닉! 선택기에 대해 클릭 판정을 수행한다. 장비 카드를
+        선택한 경우 `all_cards()` 기준 인덱스를, "무작위 손패" 슬롯을
+        선택한 경우 -1을 반환하며, 클릭이 아무 것에도 맞지 않으면 None을
+        반환한다 (배치가 아래의 그리기 함수와 동일하므로 — 둘을 항상
+        같이 맞춰서 수정해야 한다)."""
         equip       = target.equipment
         show_random = bool(target.hand)
         n           = len(equip) + (1 if show_random else 0)
@@ -804,7 +807,7 @@ class GameScreen:
         return hx, WIN_H - CARD_H - 60
 
     # ═════════════════════════════════════════════════════════════════════
-    # Drawing
+    # 그리기
     # ═════════════════════════════════════════════════════════════════════
     def draw(self):
         s = self.screen
@@ -838,7 +841,7 @@ class GameScreen:
         self.screen.blit(self._board_surf, self._board_pos)
 
     def _draw_deck_discard(self):
-        """Draw pile (center-left) + discard pile (center-right) on the felt."""
+        """판 위 좌측 중앙에 덱, 우측 중앙에 버림 더미를 그린다."""
         s, gs = self.screen, self.gs
         dw, dh = int(CARD_W * 0.85), int(CARD_H * 0.85)
         gap = 20
@@ -876,12 +879,12 @@ class GameScreen:
         draw_text(s, f"버림 {n_disc}장", "tiny", GOLD, disc_x + dw // 2, y + dh + 8, "center")
 
     def _human_viewer_pid(self) -> int:
-        """The human player whose perspective the table should be drawn from
-        right now (-1 if it's nobody's human turn, e.g. pure AI spectating).
+        """지금 이 순간 테이블을 그려야 할 시점(관점)이 되는 사람 플레이어
+        (사람의 턴이 아닌 경우, 즉 순수 AI 관전 상황이면 -1).
 
-        Same phase-based resolution _draw_hand_area uses to decide whose
-        hand to reveal — factored out so other drawing (e.g. per-opponent
-        distance) can use the same "whose point of view is this" notion.
+        _draw_hand_area가 누구의 손패를 공개할지 결정할 때 쓰는 것과 동일한
+        단계 기반 판정 로직이다 — 다른 그리기 작업(예: 상대별 거리 표시)도
+        같은 "이것이 누구의 시점인가" 개념을 쓸 수 있도록 별도로 분리했다.
         """
         gs = self.gs
         if gs.phase == Phase.RESPONSE:
@@ -897,15 +900,17 @@ class GameScreen:
         return show_pid
 
     def _role_reveal_pids(self) -> set:
-        """Players whose own (otherwise-secret) role should be shown right
-        now, on top of anyone already revealed (Sheriff, eliminated).
+        """이미 공개된 사람들(보안관, 탈락자)에 더해, 지금 당장 (원래는 비밀인)
+        자신의 역할을 보여줘야 하는 플레이어들.
 
-        Solo vs AI: the one human always sees their own role — it's their
-        own information, not something they need to "discover" by acting.
-        Local hotseat: everyone is human, so revealing all roles all the
-        time would spoil the secret for whoever is glancing at the shared
-        screen; only the player whose turn/response it currently is gets
-        to see their own role, mirroring _human_viewer_pid().
+        솔로 vs AI 모드: 유일한 사람 플레이어는 항상 자신의 역할을 볼 수
+        있다 — 행동을 통해 "알아내야" 하는 정보가 아니라 본래 자신의
+        정보이기 때문이다.
+        로컬 핫시트(같은 화면을 돌려쓰는) 모드: 모두가 사람이므로 항상
+        모든 역할을 공개하면 공유 화면을 보고 있는 다른 사람에게 비밀이
+        새어나간다. 따라서 지금 턴이거나 반응 중인 플레이어만 자신의
+        역할을 볼 수 있도록 하여, _human_viewer_pid()와 동일한 방식을
+        따른다.
         """
         gs = self.gs
         if len(gs.human_ids) <= 1:
@@ -917,16 +922,16 @@ class GameScreen:
         s   = self.screen
         gs  = self.gs
         pos = pygame.mouse.get_pos()
-        pulse = (math.sin(self._anim_clock / 260.0) + 1) / 2   # 0..1 breathing glow
+        pulse = (math.sin(self._anim_clock / 260.0) + 1) / 2   # 0..1 사이를 오가는 숨쉬는 듯한 발광 효과
         self._hover_pid = None
         viewer_pid  = self._human_viewer_pid()
         reveal_pids = self._role_reveal_pids()
 
         for pid, (px, py) in self._player_positions.items():
             p      = gs.players[pid]
-            # You always know your own role — only other players' roles stay
-            # hidden until revealed (official rule: "look at your role but
-            # keep it secret", which only restricts what others can see).
+            # 자신의 역할은 항상 알고 있다 — 다른 플레이어의 역할만 공개되기
+            # 전까지 숨겨진다 (공식 규칙: "자신의 역할을 확인하되 비밀로
+            # 유지한다"는 다른 사람이 볼 수 있는 것만 제한한다는 의미다).
             reveal = p.role_revealed or pid in reveal_pids
             col = ROLE_COLORS.get(p.role.value, GRAY) if reveal else GRAY
             dim = 1.0 if p.alive else 0.35
@@ -942,7 +947,7 @@ class GameScreen:
             if hovered:
                 self._hover_pid = pid
             glow_k = 0.32 + 0.22 * pulse
-            # Glows
+            # 발광 효과
             if is_active:
                 for gr in (R+18, R+12, R+6):
                     pygame.draw.circle(s, tuple(int(c * glow_k) for c in GOLD), (px, py), gr)
@@ -955,12 +960,12 @@ class GameScreen:
 
             base = tuple(int(c * dim) for c in col)
 
-            # Grounding shadow + seat disc
+            # 바닥에 닿은 듯한 그림자 + 좌석 원판
             pygame.draw.circle(s, (8, 5, 2), (px + 3, py + 5), R + 3)
             pygame.draw.circle(s, (20, 14, 6), (px, py), R)
             pygame.draw.circle(s, base, (px, py), R, 3 if p.alive else 1)
             if p.alive:
-                # Soft upper-left sheen for a glossy, less flat token
+                # 좌상단에 부드러운 광택을 넣어 평평해 보이지 않고 윤기 나게 함
                 sheen = pygame.Rect(px - R + 5, py - R + 5, (R - 5) * 2, (R - 5) * 2)
                 pygame.draw.arc(s, tuple(min(255, c + 55) for c in base),
                                 sheen, math.radians(110), math.radians(195), 2)
@@ -968,14 +973,14 @@ class GameScreen:
                 pygame.draw.circle(s, WHITE, (px, py), R + 5, 2)
 
             if not p.alive:
-                # Draw X using lines (no unicode needed)
+                # 선을 이용해 X 표시 (유니코드 불필요)
                 xr = 10
                 pygame.draw.line(s, (100, 50, 50), (px - xr, py - xr), (px + xr, py + xr), 3)
                 pygame.draw.line(s, (100, 50, 50), (px + xr, py - xr), (px - xr, py + xr), 3)
             else:
                 draw_text(s, f"P{pid+1}", "small", WHITE, px, py - 8, "center")
 
-            # Nameplate panel (sized to fit the text it holds)
+            # 이름표 패널 (담고 있는 텍스트에 맞춰 크기 조정)
             role_lbl = p.role.value if reveal else "?"
             char_lbl = CHARACTERS[p.character].name_ko if p.character else None
             dist     = gs.distance(viewer_pid, pid) if (p.alive and pid != viewer_pid
@@ -1006,7 +1011,7 @@ class GameScreen:
 
             self._draw_hp(s, px, py - R - 22, p)
 
-            # Equipment icons
+            # 장비 아이콘
             eq_x = px - len(p.equipment) * 14
             eq_y = plate.bottom + 6
             for ci2, c in enumerate(p.equipment):
@@ -1031,7 +1036,7 @@ class GameScreen:
             if on:
                 draw_heart(s, bx, cy, r, (240, 110, 100), filled=False)
 
-    # ── Avatar hover tooltip (character card + UNO-style hand fan) ─────────
+    # ── 아바타 호버 툴팁 (캐릭터 카드 + UNO 스타일 손패 부채꼴) ──────────────
     def _draw_player_tooltip(self, pid: int):
         s, gs = self.screen, self.gs
         p = gs.players[pid]
@@ -1070,7 +1075,7 @@ class GameScreen:
         self._draw_hand_fan(s, len(p.hand), panel.centerx, fan_label_y + 18)
 
     def _draw_hand_fan(self, surf, n, cx, top_y):
-        """UNO-mobile-style fan of face-down mini cards + a count badge."""
+        """UNO 모바일 스타일로 뒤집힌 미니 카드를 부채꼴로 펼치고 매수 배지를 표시한다."""
         mini_w, mini_h = 30, 42
         if n == 0:
             draw_text(surf, "(없음)", "tiny", DIM, cx, top_y + mini_h // 2, "center")
@@ -1092,10 +1097,10 @@ class GameScreen:
         pygame.draw.circle(surf, WHITE, (bx, by), badge_r, 2)
         draw_text(surf, str(n), "tiny", WHITE, bx, by, "center")
 
-    # ── Card hover tooltip (name + rule summary) ────────────────────────────
+    # ── 카드 호버 툴팁 (이름 + 규칙 요약) ───────────────────────────────────
     def _draw_card_tooltip(self, card, anchor_x: int, anchor_y: int):
-        """Small popup with a card's full name + a brief rule summary, shown
-        while the mouse hovers over any rendered copy of that card."""
+        """마우스가 해당 카드가 그려진 어떤 사본 위에든 올라가 있을 때 표시되는,
+        카드의 전체 이름 + 간단한 규칙 요약이 담긴 작은 팝업."""
         s = self.screen
         lines = _wrap_text(card.desc, "tiny", 220)
 
@@ -1125,7 +1130,7 @@ class GameScreen:
             draw_text(s, line, "tiny", WHITE, panel.centerx, ty, "center")
             ty += line_h
 
-    # ── Right panel ───────────────────────────────────────────────────────
+    # ── 우측 패널 ─────────────────────────────────────────────────────────
     def _draw_right_panel(self):
         s  = self.screen
         gs = self.gs
@@ -1156,7 +1161,7 @@ class GameScreen:
             bg_c  = (35, 22, 8) if p.alive else (20, 14, 6)
             row   = pygame.Rect(rx, py2, WIN_W - rx - 8, h)
             rounded_rect(s, bg_c, row, 6)
-            # Role-colored accent tab on the left edge of every row
+            # 모든 행의 왼쪽 끝에 역할 색상으로 강조 탭 표시
             accent = pygame.Rect(row.x, row.y + 4, 4, row.h - 8)
             rounded_rect(s, col if p.alive else DIM, accent, 2)
             if pid == gs.current_pid and p.alive:
@@ -1201,7 +1206,7 @@ class GameScreen:
             if py2 > WIN_H - 10:
                 break
 
-    # ── Hand area ─────────────────────────────────────────────────────────
+    # ── 손패 영역 ─────────────────────────────────────────────────────────
     def _draw_hand_area(self):
         gs = self.gs
         if gs.phase in (Phase.GAME_OVER, Phase.KIT_PEEK, Phase.CHAR_DRAW,
@@ -1279,7 +1284,7 @@ class GameScreen:
                        selected=selected, playable=playable,
                        discard_mode=discard_mode)
 
-    # ── Gen store overlay ─────────────────────────────────────────────────
+    # ── 잡화점 오버레이 ───────────────────────────────────────────────────
     def _draw_gen_store_overlay(self):
         gs = self.gs
         if gs.phase != Phase.GEN_STORE:
@@ -1307,7 +1312,7 @@ class GameScreen:
                 self._hover_card = card
                 self._hover_card_pos = (ox + i * 96 + CARD_W // 2, cy - 60)
 
-    # ── Cat Balou/Panic! strip-target picker overlay ───────────────────────
+    # ── 캣 발루/패닉! 대상 카드 선택기 오버레이 ─────────────────────────────
     def _draw_strip_picker_overlay(self):
         if not self.strip_mode:
             return
@@ -1345,7 +1350,7 @@ class GameScreen:
                 pygame.draw.rect(s, GOLD, pygame.Rect(x, cy - 60, CARD_W, CARD_H), 3, border_radius=8)
             draw_text(s, "무작위 패", "small", WHITE, x + CARD_W // 2, cy - 60 + CARD_H + 14, "center")
 
-    # ── Kit Carlson peek overlay ───────────────────────────────────────────
+    # ── 킷 칼슨 미리보기 오버레이 ─────────────────────────────────────────────
     def _draw_kit_peek_overlay(self):
         gs = self.gs
         if gs.phase != Phase.KIT_PEEK:
@@ -1373,7 +1378,7 @@ class GameScreen:
                 self._hover_card = card
                 self._hover_card_pos = (ox + i * 100 + CARD_W // 2, cy - 65)
 
-    # ── Character draw overlay ────────────────────────────────────────────
+    # ── 캐릭터별 특수 드로우 오버레이 ─────────────────────────────────────────
     def _draw_char_draw_overlay(self):
         gs = self.gs
         if gs.phase != Phase.CHAR_DRAW:
@@ -1390,10 +1395,10 @@ class GameScreen:
         char = CHARACTERS.get(p.character)
         char_name = char.name_ko if char else p.name
 
-        # Jesse Jones lists one row per eligible target — in 5+ player games
-        # this can exceed the space a fixed panel height assumed, so grow the
-        # panel (and the bottom deck-button row, anchored to panel.bottom)
-        # to fit instead of overlapping the last row.
+        # 제시 존스는 대상이 될 수 있는 플레이어마다 한 줄씩 나열한다 —
+        # 플레이어가 5명 이상인 게임에서는 고정 패널 높이로 가정했던 공간을
+        # 넘어설 수 있으므로, 마지막 줄과 겹치지 않도록 패널(그리고
+        # panel.bottom에 고정된 하단 덱 버튼 줄)을 늘려서 맞춘다.
         alive = gs._alive_ids()
         targets = ([i for i in alive if i != pid and gs.players[i].hand]
                    if gs.char_draw_type == "jesse" else [])
@@ -1409,7 +1414,7 @@ class GameScreen:
         if gs.char_draw_type == "jesse":
             draw_text(s, "다른 플레이어 손패에서 가져오거나, 덱에서 뽑기", "small", GRAY,
                       cx, panel.y + 46, "center")
-            # List valid targets as buttons
+            # 유효한 대상들을 버튼 형태로 나열
             btn_y = panel.y + 76
             mouse = pygame.mouse.get_pos()
             for ti in targets:
@@ -1426,7 +1431,7 @@ class GameScreen:
             if not targets:
                 draw_text(s, "(가져올 수 있는 플레이어 없음 — 덱에서 뽑기)", "small",
                           (180, 140, 80), cx, panel.y + 76, "center")
-        else:  # pedro
+        else:  # 페드로
             draw_text(s, "버림더미 맨 위 카드를 가져오거나, 덱에서 뽑기", "small", GRAY,
                       cx, panel.y + 46, "center")
             if gs.discard:
@@ -1435,7 +1440,7 @@ class GameScreen:
                 from ui_utils import draw_suit_icon
                 suit_col = (190, 45, 38) if top.suit in (Suit.HEARTS, Suit.DIAMONDS) else (230, 220, 200)
                 val_str = {1: "A", 11: "J", 12: "Q", 13: "K"}.get(top.value, str(top.value))
-                # Draw card info: name + suit icon + value, centered
+                # 카드 정보 그리기: 이름 + 무늬 아이콘 + 숫자, 가운데 정렬
                 icon_y = panel.y + 76
                 left_r  = draw_text(s, f"[ {top.name}", "sub", suit_col, cx - 10, icon_y, "midright")
                 draw_suit_icon(s, top.suit.value, cx - 2, icon_y, 14, suit_col)
@@ -1451,7 +1456,7 @@ class GameScreen:
             self.btn_from_discard.rect.topleft = (cx + 10, btn_row_y)
             self.btn_from_discard.draw(s, self.btn_from_discard.is_hovered(pos))
 
-    # ── Phase banner ──────────────────────────────────────────────────────
+    # ── 단계 배너 ─────────────────────────────────────────────────────────
     def _draw_phase_banner(self):
         gs = self.gs
         if gs.phase == Phase.GAME_OVER:
@@ -1479,18 +1484,19 @@ class GameScreen:
             pygame.draw.rect(s, col, pill, 2, border_radius=pill.h // 2)
             draw_text(s, label, "small", col, pill.centerx, pill.centery, "center")
 
-    # ── Game over ─────────────────────────────────────────────────────────
+    # ── 게임 종료 ─────────────────────────────────────────────────────────
     def _draw_game_over(self):
         s     = self.screen
         cx, cy = WIN_W // 2, WIN_H // 2
         ov = pygame.Surface((WIN_W, WIN_H), pygame.SRCALPHA)
         ov.fill((0, 0, 0, 190))
         s.blit(ov, (0, 0))
-        # Reveal all roles
+        # 모든 역할 공개
         alive_roles = [(p.name, p.role.value, p.character)
                        for p in self.gs.players]
-        # Role list grows with player count (4-7) — panel must grow to match,
-        # or the last row collides with the instruction line anchored below it.
+        # 역할 목록은 플레이어 수(4~7명)에 따라 늘어난다 — 패널도 그만큼
+        # 늘려야 하며, 그렇지 않으면 마지막 줄이 그 아래에 고정된 안내
+        # 문구와 겹친다.
         panel_h = 220 + max(0, len(alive_roles) - 4) * 20
         panel = pygame.Rect(cx - 300, cy - panel_h // 2, 600, panel_h)
         rounded_rect(s, PANEL_BG, panel, 18)
@@ -1506,7 +1512,7 @@ class GameScreen:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helpers
+# 헬퍼 함수
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_positions(n: int) -> dict[int, tuple[int, int]]:
     positions = {}
@@ -1525,7 +1531,7 @@ def _worst_card_idx(hand) -> int:
 
 
 def _wrap_text(text: str, fkey: str, max_w: int) -> list[str]:
-    """Break text into lines that each fit within max_w pixels at font fkey."""
+    """폰트 fkey 기준으로 각 줄이 max_w 픽셀 이내에 들어가도록 텍스트를 줄바꿈한다."""
     f = font(fkey)
     words = text.split(" ")
     lines, cur = [], ""
@@ -1542,14 +1548,14 @@ def _wrap_text(text: str, fkey: str, max_w: int) -> list[str]:
 
 
 def _build_bg_surface() -> pygame.Surface:
-    """Backdrop gradient + vignette, built once and reused every frame."""
+    """배경 그라디언트 + 비네트 효과, 한 번만 만들어 매 프레임 재사용한다."""
     surf = vertical_gradient(WIN_W, WIN_H, BG_TOP, BG_BOTTOM)
     surf.blit(radial_vignette(WIN_W, WIN_H, max_alpha=140), (0, 0))
     return surf
 
 
 def _build_board_surface() -> pygame.Surface:
-    """Wooden-rimmed felt table, built once and blitted at board position."""
+    """나무 테두리가 있는 펠트 테이블, 한 번만 만들어 보드 위치에 그린다."""
     outer_w, outer_h = 560, 400
     felt_w, felt_h   = 492, 348
     core_w, core_h   = 150, 100
@@ -1558,14 +1564,15 @@ def _build_board_surface() -> pygame.Surface:
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
     cx, cy = w // 2, h // 2
 
-    # Soft contact shadow under the table
+    # 테이블 아래에 부드러운 접촉 그림자
     for i in range(12, 0, -1):
         a = min(85, 7 * i)
         rect = pygame.Rect(0, 0, outer_w + i * 5, outer_h + i * 5)
         rect.center = (cx, cy + 12)
         pygame.draw.ellipse(surf, (0, 0, 0, a), rect)
 
-    # Wooden rim — gradient bands from dark outer edge to lighter inner edge
+    # 나무 테두리 — 어두운 바깥쪽 가장자리에서 밝은 안쪽 가장자리로
+    # 이어지는 그라디언트 띠
     rim_steps = 16
     for i in range(rim_steps):
         t = i / (rim_steps - 1)
@@ -1576,7 +1583,7 @@ def _build_board_surface() -> pygame.Surface:
         rect.center = (cx, cy)
         pygame.draw.ellipse(surf, col, rect)
 
-    # Felt interior — gradient from shadowed edge to lit center
+    # 펠트 내부 — 그늘진 가장자리에서 밝은 중앙으로 이어지는 그라디언트
     felt_steps = 18
     for i in range(felt_steps, -1, -1):
         t = i / felt_steps
@@ -1587,7 +1594,7 @@ def _build_board_surface() -> pygame.Surface:
         rect.center = (cx, cy)
         pygame.draw.ellipse(surf, col, rect)
 
-    # Crisp rim edge + faint inner highlight ring
+    # 선명한 테두리 외곽선 + 옅은 안쪽 하이라이트 링
     outer_rect = pygame.Rect(0, 0, outer_w, outer_h); outer_rect.center = (cx, cy)
     pygame.draw.ellipse(surf, (32, 19, 8), outer_rect, 3)
     felt_rect = pygame.Rect(0, 0, felt_w, felt_h); felt_rect.center = (cx, cy)

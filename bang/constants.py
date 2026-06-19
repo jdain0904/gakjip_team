@@ -1,7 +1,7 @@
 WIN_W, WIN_H = 1280, 800
 FPS = 60
 
-# Western dark theme
+# 서부극 느낌의 어두운 테마
 BG          = (22, 14,  6)
 PANEL_BG    = (38, 24, 10)
 PANEL_DARK  = (28, 16,  6)
@@ -25,7 +25,7 @@ ROLE_COLORS = {
     "배신자":  PURPLE,
 }
 
-# Table/background gradient tones
+# 테이블/배경 그라디언트 색조
 BG_TOP    = ( 34, 22, 11)
 BG_BOTTOM = ( 14,  8,  3)
 WOOD_DRK  = ( 54, 32, 14)

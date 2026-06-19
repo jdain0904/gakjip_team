@@ -1,4 +1,4 @@
-"""Shared UI helpers for all screens."""
+"""모든 화면에서 공유하는 UI 헬퍼 함수들."""
 import math
 import os
 import pygame
@@ -7,23 +7,23 @@ from constants import WHITE, GRAY, DIM
 
 _fonts: dict[str, pygame.font.Font] = {}
 
-# Bundled Korean font (NAVER Nanum Gothic, SIL OFL 1.1 — see LICENSE file
-# alongside it). Loading this directly guarantees correct Hangul rendering
-# on every machine the game ships to, regardless of which system fonts (if
-# any) happen to be installed — the previous approach relied on guessing an
-# installed font name, which silently produced tofu/blank glyphs on systems
-# without one of those specific fonts.
+# 내장된 한글 폰트 (네이버 나눔고딕, SIL OFL 1.1 — 함께 들어있는 LICENSE
+# 파일 참고). 이 폰트를 직접 로드하면 게임이 배포되는 모든 머신에서 어떤
+# 시스템 폰트가 설치되어 있는지(설치되어 있기는 한지)와 무관하게 한글이
+# 올바르게 렌더링되는 것이 보장된다 — 이전 방식은 설치된 폰트 이름을
+# 추측하는 데 의존했기 때문에, 해당 특정 폰트들이 없는 시스템에서는
+# 빈 칸/깨진 글자(tofu)가 조용히 나타나는 문제가 있었다.
 _BUNDLED_FONT = os.path.join(os.path.dirname(__file__), "assets", "fonts", "NanumGothic.ttf")
 
 
 def _find_fallback_font_path() -> str | None:
-    """Only used if the bundled font file is somehow missing.
+    """내장 폰트 파일이 어떤 이유로 없을 때만 사용된다.
 
-    pygame.font.SysFont() never fails — for an unknown name it silently
-    substitutes a Latin-only default — so this resolves each candidate
-    through match_font() (which returns a real file path or None) and loads
-    that exact file directly, rather than asking SysFont to re-resolve the
-    name itself through a possibly different matching path.
+    pygame.font.SysFont()는 절대 실패하지 않는다 — 알 수 없는 이름이
+    들어오면 라틴 문자 전용 기본 폰트로 조용히 대체해버린다 — 그래서
+    이 함수는 각 후보를 match_font()(실제 파일 경로 또는 None을 반환)로
+    직접 확인한 뒤 그 정확한 파일을 바로 로드하며, SysFont가 다른 매칭
+    경로를 통해 이름을 다시 알아서 해석하도록 맡기지 않는다.
     """
     candidates = ["malgungothic", "malgun gothic", "applegothic", "nanumgothic",
                   "gulim", "dotum", "notosanskr", "notosanscjkkr",
@@ -56,7 +56,7 @@ def draw_text(surf, text, fkey, color, x, y, anchor="topleft"):
 
 
 def draw_suit_icon(surf, suit_value: str, cx: int, cy: int, size: int, color):
-    """Draw a playing card suit symbol as shapes (no font required)."""
+    """카드 무늬 기호를 도형으로 그린다 (폰트 불필요)."""
     r = max(3, size // 2)
     if suit_value == '♥':
         h = max(2, r // 2)
@@ -97,7 +97,7 @@ def rounded_rect(surf, color, rect, r=10, border=0, bc=None):
 
 
 def vertical_gradient(w: int, h: int, top, bottom) -> pygame.Surface:
-    """Build a Surface filled with a smooth top-to-bottom color gradient."""
+    """위에서 아래로 부드럽게 변하는 색상 그라디언트로 채워진 Surface를 만든다."""
     surf = pygame.Surface((max(1, w), max(1, h)))
     h = max(1, h)
     for y in range(h):
@@ -108,7 +108,7 @@ def vertical_gradient(w: int, h: int, top, bottom) -> pygame.Surface:
 
 
 def radial_vignette(w: int, h: int, max_alpha: int = 130, steps: int = 28) -> pygame.Surface:
-    """Build a transparent Surface that darkens smoothly toward the edges."""
+    """가장자리로 갈수록 부드럽게 어두워지는 투명 Surface를 만든다."""
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
     cx, cy = w / 2, h / 2
     max_r = math.hypot(cx, cy)
