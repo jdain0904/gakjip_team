@@ -1,24 +1,25 @@
-"""Probability-driven expected-value scoring shared by the Medium and Hard AI.
+"""보통과 어려움 AI가 공유하는, 확률 기반의 기댓값(EV) 점수화 로직.
 
-Every legal action available to a player is scored from the same
-playbook, using `ai_probability.CardCounter` to turn "cards already
-played" + "cards I'm holding" into real odds. The two non-Easy
-difficulties only differ in *which* ranked action they ultimately
-commit to:
+플레이어가 취할 수 있는 모든 합법적 행동은 동일한 방식으로 점수가
+매겨지며, `ai_probability.CardCounter`를 사용해 "이미 사용된 카드" +
+"내가 들고 있는 카드" 정보를 실제 확률로 변환한다. 쉬움을 제외한 두
+난이도는 오직 *어떤* 순위의 행동을 최종적으로 선택하는지에서만
+차이가 난다:
 
-  - Hard always takes rank 0 (the highest-scoring action), using
-    weights learned by reinforcement learning over self-play (see
-    ai_agent.BangAI.record_game_result and train_ai.py).
-  - Medium picks between rank 0 and rank 1 based on
-    winrate_model.WinRateModel's predicted win probability for the
-    human side (see ai_agent.BangAI._predict_human_winrate) — this is
-    the project's dynamic difficulty adjustment.
+  - 어려움은 항상 순위 0(가장 높은 점수의 행동)을 선택하며, 자가대전을
+    통해 강화학습으로 학습된 가중치를 사용한다 (ai_agent.BangAI.
+    record_game_result와 train_ai.py 참고).
+  - 보통은 winrate_model.WinRateModel이 예측한 인간 측 승률(ai_agent.
+    BangAI._predict_human_winrate 참고)을 기준으로 순위 0과 순위 1
+    사이에서 선택한다 — 이것이 바로 이 프로젝트의 동적 난이도 조절
+    기능이다.
 
-Staying faithful to one's own role is treated as a hard constraint, not
-a scoring preference: single-target harmful cards (BANG!, Duel, Cat
-Balou, Panic!, Jail) simply skip any player already confirmed to be an
-ally. Area cards (Indians!, Gatling) can't avoid hitting allies by the
-game's own rules, so they're penalised for ally splash damage instead.
+자신의 역할에 충실하게 행동하는 것은 점수상의 선호가 아니라 강한
+제약(hard constraint)으로 취급된다: 단일 대상 해로운 카드(BANG!,
+결투, 캣 발루, 패닉!, 감옥)는 이미 동료로 확인된 플레이어를 그냥
+건너뛴다. 범위 카드(인디언!, 개틀링)는 게임 규칙상 동료를 맞히지
+않을 방법이 없으므로, 대신 동료에게 입히는 부수 피해에 대해
+페널티를 받는다.
 """
 from __future__ import annotations
 import random
@@ -50,9 +51,9 @@ class Action:
 
 def score_play_actions(gs, pid, counter: CardCounter, w, known_enemies: set[int],
                         known_allies: set[int]) -> list[Action]:
-    """Score every legal play available to `pid` right now, plus 'end_turn'.
+    """현재 `pid`가 사용할 수 있는 모든 합법적 플레이와 'end_turn'에 점수를 매긴다.
 
-    Returns a list of `Action`s sorted by score, descending.
+    점수 내림차순으로 정렬된 `Action` 리스트를 반환한다.
     """
     p     = gs.players[pid]
     out: list[Action] = []
@@ -84,7 +85,7 @@ def score_play_actions(gs, pid, counter: CardCounter, w, known_enemies: set[int]
                     out.append(Action(score, ("play", ci, tid), feat, ct, tid))
             continue
 
-        # No-target plays
+        # 대상이 필요 없는 플레이
         if ct == CardType.BEER:
             score, feat = _score_beer(p, w)
             out.append(Action(score, ("play", ci), feat, ct))
@@ -123,7 +124,7 @@ def score_play_actions(gs, pid, counter: CardCounter, w, known_enemies: set[int]
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Per-card-type scorers
+# 카드 종류별 점수 계산 함수
 # ─────────────────────────────────────────────────────────────────────────
 def _score_bang(gs, tid, counter, w, enemy):
     target = gs.players[tid]
@@ -152,7 +153,7 @@ def _score_duel(gs, pid, tid, counter, w, enemy):
 
 
 def _score_strip(tid, gs, counter, w, enemy, ct):
-    """Choose which card to take from `tid` (Panic!/Cat Balou) and score it."""
+    """`tid`로부터 어떤 카드를 가져올지(패닉!/캣 발루) 결정하고 점수를 매긴다."""
     target = gs.players[tid]
     all_c  = target.all_cards()
     equip_idx = next((i for i, c in enumerate(all_c) if c.card_type in VALUABLE_EQUIP), None)
@@ -169,7 +170,7 @@ def _score_strip(tid, gs, counter, w, enemy, ct):
         base = 2.0 + 3.0 * counter.prob_useful_hand_card(tid)
         return tci, base * (1.25 if enemy else 0.7), feat_hand
 
-    # Only low-value equipment remains (e.g. Jail/Dynamite) — still take it, low priority
+    # 가치가 낮은 장비만 남아있는 경우(예: 감옥/다이너마이트) — 그래도 가져가긴 하되 우선순위는 낮춤
     return 0, 1.0 * (1.1 if enemy else 0.6), feat_equip
 
 
@@ -179,8 +180,9 @@ def _score_jail(counter, w, enemy):
 
 
 def _score_area(gs, pid, counter, w, known_enemies, known_allies, feat, dodge_prob_fn):
-    """Shared EV model for Indians!/Gatling: both hit every other living player
-    who can't produce the right card, and neither one risks the player who plays it.
+    """인디언!/개틀링이 공유하는 EV 모델: 두 카드 모두 적절한 카드를 내지
+    못하는 다른 모든 생존 플레이어를 맞히며, 카드를 낸 본인은 둘 다
+    위험에 노출되지 않는다.
     """
     enemy_hits = ally_hits = neutral_hits = 0.0
     for tid in gs._alive_ids():
@@ -237,7 +239,7 @@ def _score_dynamite(counter, w):
 
 
 def score_gen_store_card(c, player, counter, w) -> float:
-    """Mirror of the play-phase scoring logic, applied to a face-up General Store card."""
+    """플레이 단계 점수화 로직을 앞면이 보이는 잡화점 카드에 그대로 적용한 버전."""
     ct = c.card_type
     if ct == CardType.BANG:
         return w("shoot_enemy")
@@ -249,11 +251,11 @@ def score_gen_store_card(c, player, counter, w) -> float:
         return w("stagecoach")
     if c.is_gun and c.gun_range > player.gun_range():
         return w("equip_gun")
-    # Check for a *real* copy specifically, not has_barrel()/has_scope()/
-    # has_mustang() — those also count Jourdonnais/Rose Doolan/Paul Regret's
-    # innate virtual copy, which would wrongly hide the fact that those three
-    # genuinely benefit from picking up a real one too (stacking, see
-    # Player.barrel_count()).
+    # has_barrel()/has_scope()/has_mustang()가 아니라 *실제* 카드 보유 여부를
+    # 명확히 확인한다 — 그 함수들은 주르도네/로즈 둘란/폴 리그렛이 선천적으로
+    # 가지는 가상의 카드도 함께 집계하므로, 이 세 캐릭터가 실제 카드를 한 장
+    # 더 얻었을 때 진짜로 이득을 보는 사실(스택 가능, Player.barrel_count()
+    # 참고)을 잘못 가려버리게 된다.
     if ct == CardType.BARREL and not any(c.card_type == CardType.BARREL for c in player.equipment):
         return w("equip_barrel")
     if ct == CardType.SCOPE and not any(c.card_type == CardType.SCOPE for c in player.equipment):

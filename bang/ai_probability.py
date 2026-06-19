@@ -1,10 +1,10 @@
-"""Card-counting probability engine for AI decision-making.
+"""AI 의사결정을 위한 카드 카운팅 확률 엔진.
 
-Estimates the odds that cards not currently visible to a given player
-(still in the deck, in the discard-bound future, or in an opponent's
-hand) match some property — e.g. "is a Missed!", "is a Heart" — using
-the hypergeometric distribution over every card that player hasn't
-already seen.
+특정 플레이어에게 현재 보이지 않는 카드들(아직 덱에 있거나, 앞으로
+버려질 운명이거나, 상대의 손패에 있는 카드)이 어떤 속성을
+만족할 확률을 추정한다 — 예를 들어 "Missed!인가", "♥ 무늬인가" 등을,
+그 플레이어가 아직 보지 못한 모든 카드에 대한 초기하분포
+(hypergeometric distribution)를 이용해 계산한다.
 """
 from __future__ import annotations
 import math
@@ -24,7 +24,8 @@ def _full_deck() -> list[Card]:
 
 
 def _hypergeom_at_least_one(pool: int, hits: int, draw: int) -> float:
-    """P(>=1 success) drawing `draw` cards from a `pool`-card population with `hits` successes."""
+    """`hits`개의 성공 사례가 있는 `pool`장 중에서 `draw`장을 뽑을 때, 성공(성공
+    사례 카드)이 1장 이상 나올 확률 P(>=1 success)."""
     if pool <= 0 or hits <= 0 or draw <= 0:
         return 0.0
     draw = min(draw, pool)
@@ -74,7 +75,7 @@ class CardCounter:
         return _hypergeom_at_least_one(self.unseen_total, hits, hand_size)
 
     def prob_dodge(self, target_pid: int) -> float:
-        """Probability a BANG! aimed at target_pid is avoided (Missed! or Barrel)."""
+        """target_pid를 향한 BANG!이 회피될(Missed! 또는 나무통) 확률."""
         target = self.gs.players[target_pid]
         types = (CardType.MISSED, CardType.BANG) if target.is_calamity_janet() else (CardType.MISSED,)
         p_card = self.prob_has_any_type(len(target.hand), *types)
@@ -83,23 +84,23 @@ class CardCounter:
             return p_card
         hearts_unseen = self.unseen_matching(lambda c: c.suit == Suit.HEARTS)
         p_heart  = (hearts_unseen / self.unseen_total) if self.unseen_total > 0 else 0.0
-        # Jourdonnais with a real Barrel also in play gets two independent
-        # flip attempts (see Player.barrel_count()).
+        # 실제 나무통도 함께 장착한 주르도네는 독립적인 뒤집기 시도를
+        # 두 번 받는다 (Player.barrel_count() 참고).
         p_barrel = 1 - (1 - p_heart) ** barrels
         return p_card + (1 - p_card) * p_barrel
 
     def prob_has_bang_equivalent(self, pid: int) -> float:
-        """Probability `pid` can answer Indians!/a Duel with a BANG! (or Janet's Missed!)."""
+        """`pid`가 인디언!/결투에 BANG!(또는 재닛의 Missed!)으로 응답할 수 있는 확률."""
         p = self.gs.players[pid]
         types = (CardType.BANG, CardType.MISSED) if p.is_calamity_janet() else (CardType.BANG,)
         return self.prob_has_any_type(len(p.hand), *types)
 
     def prob_useful_hand_card(self, pid: int) -> float:
-        """Estimated odds a single unseen card from `pid`'s hand is generally useful."""
+        """`pid`의 손패에서 아직 보이지 않은 카드 1장이 대체로 유용할 추정 확률."""
         return self.unseen_fraction(*USEFUL_TYPES)
 
     def prob_escape_jail(self) -> float:
-        """Probability a Jail/Dynamite-style Heart flip succeeds."""
+        """감옥/다이너마이트 방식의 ♥ 카드 뒤집기가 성공할 확률."""
         hearts_unseen = self.unseen_matching(lambda c: c.suit == Suit.HEARTS)
         return (hearts_unseen / self.unseen_total) if self.unseen_total > 0 else 0.0
 

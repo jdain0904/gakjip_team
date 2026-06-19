@@ -1,11 +1,12 @@
-"""State-vector feature extraction for the win-rate prediction model.
+"""승률 예측 모델을 위한 상태 벡터 특징 추출.
 
-Builds a fixed-length numeric vector describing the game state from one
-player's point of view. Only information that player could legitimately
-know goes in: their own public+private state, plus `ai_probability`
-hypergeometric estimates for hidden opponent information. Opponents'
-actual hand contents are never inspected — same epistemic-fairness rule
-the rest of the AI already follows (see ai_probability.CardCounter).
+한 플레이어의 시점에서 게임 상태를 설명하는 고정 길이의 숫자 벡터를
+만든다. 그 플레이어가 정당하게 알 수 있는 정보만 포함된다: 자신의
+공개+비공개 상태와, 상대측의 숨겨진 정보에 대한 `ai_probability`의
+초기하분포 기반 추정값이 그것이다. 상대의 실제 손패 내용은 절대
+들여다보지 않는다 — AI의 나머지 부분이 이미 따르고 있는 동일한
+인식적 공정성(epistemic-fairness) 규칙이다 (ai_probability.CardCounter
+참고).
 """
 from __future__ import annotations
 from roles import Role
@@ -21,7 +22,7 @@ FEATURE_NAMES = [
 
 
 def state_vector(gs, pid: int) -> list[float]:
-    """Feature vector x for player `pid` in game state `gs`. len(x) == len(FEATURE_NAMES)."""
+    """게임 상태 `gs`에서 플레이어 `pid`에 대한 특징 벡터 x. len(x) == len(FEATURE_NAMES)."""
     p      = gs.players[pid]
     alive  = gs._alive_ids()
     others = [i for i in alive if i != pid]
